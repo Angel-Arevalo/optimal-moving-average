@@ -11,5 +11,8 @@ def read_asset(asset_name: str) -> pd.DataFrame:
 #                                   open-high-low-close
 #
 # Intervalos válidos: 1min, 5min, 15min, 1H, ...
-def ohlc_form(asset_name:str, time_rule: str) -> pd.DataFrame:
-    return read_asset(asset_name)["Precio Spot"].resample(time_rule).ohlc().ffill().bfill()
+def ohlc_form(asset_name: str = None, time_rule: str = "1min", data: pd.DataFrame = None) -> pd.DataFrame:
+    if data is None and asset_name != None:
+        return read_asset(asset_name)["Precio Spot"].resample(time_rule).ohlc().ffill().bfill()
+
+    return data["Precio Spot"].resample(time_rule).ohlc().ffill()
