@@ -5,7 +5,7 @@ from read_data import ohlc_form, read_asset
 from use_tecnics import main, simple_methods
 from tester import backtest_ma
 
-weights: list[float] = [0.3, 0.3, 0.3, 0.1]
+weights: list[float] = [1, 1, 1, 0]
 calls: int = 50
 initial_points: int = 20
 lookbacks: int = 110
@@ -22,12 +22,12 @@ def best_main(asset_name: str, engie: str = "gp") -> None:
         return -func_to_opt(data, method, lookback, vela)
     
     space: list[Categorical, Integer, Integer] = make_search_space(methods, lookbacks, candles)
-
+    print(space)
     if engie == "gp":
         result = gp_minimize(
                     func=objective,
                     dimensions=space,
-                    n_calls=calls,
+                    n_calls=100,
                     n_initial_points=10,
                     random_state=42,
                 )
@@ -40,19 +40,22 @@ def best_main(asset_name: str, engie: str = "gp") -> None:
         print("Mejor lookback:", best_lookback)
         print("Mejor candle  :", best_candle)
         print("Best KPI combo:", best_score)
-        
-        print(func_to_opt(data, best_method, best_lookback, best_candle, True))
+
+        func_to_opt(data, best_method, best_lookback, best_candle, True)
 
 
-def func_to_opt(data: pd.DataFrame, method: str, lookback: int, candle: int, perform: bool = False) -> float:
+
+def func_to_opt(data: pd.DataFrame, method: str, lookback: int, candle: int, _prin: bool = False) -> float:
     ohlc: pd.DataFrame = ohlc_form(None, str(candle) + "min", data)
     ma_perform: pd.Series = main(method, lookback, ohlc)
     hr, rr, pr, tr = backtest_ma(ma_perform, ohlc["close"])
-    
-    if perform:
-        print("hit ratio, risk reward, profit ratio, trades")
-        return (hr, rr, pr, tr)
-    return (weights[0]*hr + rr*weights[1] + pr*weights[2])/weights[3]
+    if _prin:
+        print("Hit ratio:", hr)
+        print("Risk reward:", rr)
+        print("Profit ratio:", pr)
+        print("# trades:", tr)
+    else:
+        return weights[0]*hr + rr*weights[1] + pr*weights[2] + tr*weights[3]
 
 
 # La cota inferior de range_back es 2 y la de range_candle es 1. La cota máxima depende 

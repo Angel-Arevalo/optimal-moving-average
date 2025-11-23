@@ -2,7 +2,7 @@ import pandas as pd
 from numpy import float64
 
 # Se retornan los kpi's en una tupla con este orden: hit ratio, risk reward ratio, profit ratio
-def backtest_ma(man_back: pd.Series, real_data: pd.Series) -> tuple[float, float, float]:
+def backtest_ma(man_back: pd.Series, real_data: pd.Series) -> tuple[float, float, float, float]:
     vector_buy: pd.Series = get_vector_buys(man_back, real_data)
 
     prices_and_signals: pd.DataFrame = pd.concat([vector_buy, real_data], axis=1, join="inner")
@@ -32,7 +32,13 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series) -> pd.Series:
 
 # esta es una medida de cuántas veces la ma acierta 
 def hit_ratio(trade_resume: pd.Series) -> float:
-    return float64(len(trade_resume[trade_resume > 0])/len(trade_resume))
+    counter: int = 0
+
+    for trade in trade_resume:
+        if trade > 0:
+            counter += 1
+
+    return counter/len(trade_resume)
 
 # es una medida que me dice cuánto gano en promedio comparado con las perdidas
 def rr_ratio(trade_resume: pd.Series) -> float:
