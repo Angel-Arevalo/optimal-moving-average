@@ -4,22 +4,24 @@ import pandas as pd
 from read_data import ohlc_form, read_asset
 from use_tecnics import main, simple_methods
 from tester import backtest_ma
+from numpy import exp
 
-weights: list[float] = [0.3, 0.3, 0.3, 0.1]
+weights: list[float] = [0.3, 0.4, 0.3, 0]
 calls: int = 50
 initial_points: int = 20
 lookbacks: int = 110
 candles: int = 100
 methods: set[str] = simple_methods
 
-def best_main(asset_name: str, engie: str = "gp") -> None:
+
+def best_main(asset_name: str, engie: str = "gp", obj: str = "kpi") -> None:
     data: pd.DataFrame = read_asset(asset_name)
         
     # función auxiliar para la optimización
     def objective(params: tuple[str, int, int]) -> float:
         method, lookback, vela = params
 
-        return -func_to_opt(data, method, lookback, vela)
+        return -func_to_opt(data, method, lookback, vela, False, obj)
     
     space: list[Categorical, Integer, Integer] = make_search_space(methods, lookbacks, candles)
 
@@ -39,20 +41,31 @@ def best_main(asset_name: str, engie: str = "gp") -> None:
         print("Mejor método  :", best_method)
         print("Mejor lookback:", best_lookback)
         print("Mejor candle  :", best_candle)
-        print("Best KPI combo:", best_score)
+        print("Best", "KPI combo" if obj == "kpi" else "total money", ":", best_score)
         
-        print(func_to_opt(data, best_method, best_lookback, best_candle, True))
+        print(func_to_opt(data, best_method, best_lookback, best_candle, True, "kpi"))
+        if obj != "mon":
+            print(func_to_opt(data, best_method, best_lookback, best_candle, True, "mon"))
 
 
-def func_to_opt(data: pd.DataFrame, method: str, lookback: int, candle: int, perform: bool = False) -> float:
+
+def func_to_opt(data: pd.DataFrame, method: str, lookback: int, candle: int, perform: bool = False, obj: str = "kpi") -> float:
     ohlc: pd.DataFrame = ohlc_form(None, str(candle) + "min", data)
     ma_perform: pd.Series = main(method, lookback, ohlc)
-    hr, rr, pr, tr = backtest_ma(ma_perform, ohlc["close"])
+    if obj == "kpi":
+        hr, rr, pr, tr = backtest_ma(ma_perform, ohlc["close"])
     
-    if perform:
-        print("hit ratio, risk reward, profit ratio, trades")
-        return (hr, rr, pr, tr)
-    return (weights[0]*hr + rr*weights[1] + pr*weights[2])/weights[3]
+        if perform:
+            print("hit ratio, risk reward, profit ratio, trades")
+            return (hr, rr, pr, tr)
+        return weights[0]*hr + rr*weights[1] + pr*weights[2] + tr*weights[3]
+    elif obj == "mon":
+        return backtest_ma(ma_perform, ohlc["close"], obj)
+    
+    return 0
+
+def norm_tr(tr: int) -> float:
+    return 1/(exp(-tr) + 1)
 
 
 # La cota inferior de range_back es 2 y la de range_candle es 1. La cota máxima depende 

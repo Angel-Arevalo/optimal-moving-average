@@ -9,8 +9,7 @@ avalible_methods: set = simple_methods | complex_methods
 def main(method: str, lookback: int, data: pd.DataFrame) -> pd.Series:
     if method not in avalible_methods:
         raise ValueError("Not avalible method")
-
-
+    
     if method in simple_methods:
         return SIMPLE_METHODS[method](data["close"], lookback).bfill()
     else:
