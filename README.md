@@ -3,12 +3,12 @@
 Es importante entender que este proyecto se debe correr sobre un venv, para garatizar que no hayan daños
 en los demas entornos de python.
 
-Se hace uso de las librerias pandas, numpy y skopt (scikit-optimize). A continuación se colocan los comandos para hacer
+Se hace uso de las librerias pandas, numpy, matplotlib y skopt (scikit-optimize). A continuación se colocan los comandos para hacer
 la instalación necesaria sobre el venv:
 
 `pip install pandas`
 `pip install scikit-optimize`
-
+`pip install matplotlib`
 
 ## Cómo funciona?
 
@@ -17,3 +17,8 @@ o un buen rendimiento monetario. Para realizar eso, se usa el archivo find_best,
 o el DataFrame con la información, y solo es esperar a que el optimizador termine el proceso.
 
 Este proyecto garantiza buenos indicadores pero no los mejores.
+
+
+## Cómo maximizamos?
+Se usan los métodos de optimización gaussiana o bayesiana, y minimización con arboles, ambos métodos de la libreria de skopt.
+
