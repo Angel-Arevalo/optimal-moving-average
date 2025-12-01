@@ -6,6 +6,8 @@ from use_tecnics import main, simple_methods
 from tester import backtest_ma
 from numpy import exp
 from typing import Union
+import warnings
+warnings.filterwarnings("ignore")
 
 weights: list[float] = [0.3, 0.4, 0.3, 0]
 calls: int = 50
@@ -15,7 +17,7 @@ candles: int = 100
 methods: set[str] = simple_methods
 
 
-def best_main(asset: Union[str, pd.DataFrame], engie: str = "gp", obj: str = "kpi") -> None:
+def best_main(asset: Union[str, pd.DataFrame], engie: str = "gp", obj: str = "kpi") -> tuple[str, int, int]:
     if isinstance(asset, str):
         data: pd.DataFrame = read_asset(asset)
     else:
@@ -43,7 +45,8 @@ def best_main(asset: Union[str, pd.DataFrame], engie: str = "gp", obj: str = "kp
                 dimensions=space,
                 n_calls=calls,
                 n_initial_points=10,
-                random_state=0
+                random_state=0,
+                verbose=False
         )
     
     
@@ -51,17 +54,36 @@ def best_main(asset: Union[str, pd.DataFrame], engie: str = "gp", obj: str = "kp
     best_obj_value = result.fun
     best_score = -best_obj_value
 
-    print("Mejor método  :", best_method)
-    print("Mejor lookback:", best_lookback)
-    print("Mejor candle  :", best_candle)
-    print("Best", "KPI combo" if obj == "kpi" else "total money", ":", best_score)
-        
-    print(func_to_opt(data, best_method, best_lookback, best_candle, True, "kpi"))
-    if obj != "mon":
-        print(func_to_opt(data, best_method, best_lookback, best_candle, True, "mon"))
+    return (best_method, best_lookback, best_candle)
 
+def best_partition(asset: Union[str, pd.DataFrame], partitions: int = 3) -> None:
+    if isinstance(asset, str):
+        data: pd.DataFrame = read_asset(asset)
 
+    else:
+        data: pd.DataFrame = asset
+    print("filas encontradas del DataFrame", len(data))
+    part: int = len(data)//partitions
+    pointer: int = part
+    for i in range(1, partitions + 1):
+        sub_data: pd.DataFrame = data.head(pointer)
 
+        bets_sub: tuple[str, int, int] = best_main(sub_data, "fm", "kpi")
+        print("resultados preliminares de entrenamiento", bets_sub)
+
+        ohlc_data: pd.DataFrame = ohlc_form(data, str(bets_sub[2]) + "min")
+        ma_perform: pd.Series = main(bets_sub[0], bets_sub[1], ohlc_data)
+
+        kpis: tuple[float, float, float, int] = backtest_ma(ma_perform, ohlc_data["close"], "kpi")
+
+        print("Resultado de entrenamiento con las primeras", pointer, "filas, rango de fechas", 
+              f"{sub_data.index[0].strftime("%d/%m/%Y")}-{sub_data.index[-1].strftime("%d/%m/%Y")}")
+        print("hit ratio:", kpis[0])
+        print("risk reward:", kpis[1])
+        print("profit factor:", kpis[2])
+        print("trades:", kpis[3], "\n\n")
+
+        pointer += part
 
 
 def func_to_opt(data: pd.DataFrame, method: str, lookback: int, candle: int, perform: bool = False, obj: str = "kpi") -> float:

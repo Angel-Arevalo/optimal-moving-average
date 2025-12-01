@@ -2,6 +2,7 @@ import pandas as pd
 from numpy import float64
 
 # Se retornan los kpi's en una tupla con este orden: hit ratio, risk reward ratio, profit ratio
+
 def backtest_ma(man_back: pd.Series, real_data: pd.Series, obj: str = "kpi") -> tuple[float, float, float, float]:
     vector_buy: pd.Series = get_vector_buys(man_back, real_data)
 
@@ -36,6 +37,8 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series) -> pd.Series:
 
 # esta es una medida de cuántas veces la ma acierta 
 def hit_ratio(trade_resume: pd.Series) -> float:
+    if len(trade_resume) == 0:
+        return 0
     counter: int = 0
 
     for trade in trade_resume:

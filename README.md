@@ -6,10 +6,7 @@ en los demas entornos de python.
 Se hace uso de las librerias pandas, numpy, matplotlib y skopt (scikit-optimize). A continuación se colocan los comandos para hacer
 la instalación necesaria sobre el venv:
 
-`pip install pandas`
-`pip install scikit-optimize`
-`pip install matplotlib`
-
+`pip install pandas scikit-optimize matplotlib ta-lib`
 ## Cómo funciona?
 
 El funcionamiento es bastante simple. Primero debemos fijar qué objetivo tenemos, ya sea, tener buenos indicadores técnicos 
@@ -21,4 +18,12 @@ Este proyecto garantiza buenos indicadores pero no los mejores.
 
 ## Cómo maximizamos?
 Se usan los métodos de optimización gaussiana o bayesiana, y minimización con arboles, ambos métodos de la libreria de skopt.
+
+
+En el archivo `find_best.py` se pueden encontrar dos funciones principales, `best_main()` y `best_partition()`. 
+La primera toma todos los datos proporcionados y encuentra la mejor moving averague optimizando los kpis o la cantidad de dinero ganada. 
+
+La segunda siempre optimiza los kpis, pero con la diferencia que se hace una partición de la información; se le pasa un 
+número y con respecto a ese número parte la base de datos para obtener una parte de entrenamiento y tomar toda la info de testeo. Esto mas como
+un experimento de qué tanto se mantiene la mejor moving averague encontrada en la totalidad del tiempo.
 
