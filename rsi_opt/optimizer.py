@@ -7,11 +7,21 @@ filterwarnings("ignore")
 max_n: int = 50
 calls: int = 50
 
+# se espera que el atr y rsi 
+# tengan uso en la búsqueda en algún futuro, 
+# el valor puede cambiarse según el modelo
+horizon: int = 5
+
 # se espera que el primer argumento debe ser una moving 
 # averague, 
-def main(data: pd.Series, moving_averague: pd.Series, engie: str = "fm"):
+def main(data: pd.DataFrame, objetive: str, moving_averague: pd.Series = None, engie: str = "fm"):
     def f(n: int):
-        return -func_to_opt(data, moving_averague, n[0])
+        if objetive == "rsi":
+            return -func_to_opt_rsi(data["close"], moving_averague, n[0])
+        elif objetive == "atr":
+            return -func_to_opt_atr(data["close"], data, n[0])
+        else:
+            raise ValueError("Solo es posible optimizar rsi o atr")
 
     space: list[Integer] = make_search_space(max_n)
 
@@ -24,7 +34,7 @@ def main(data: pd.Series, moving_averague: pd.Series, engie: str = "fm"):
                  random_state = 0,
                  verbose = False
         )
-    if engie == "gp":
+    elif engie == "gp":
         result = gp_minimize(
             func = f,
             dimensions = space,
@@ -33,7 +43,9 @@ def main(data: pd.Series, moving_averague: pd.Series, engie: str = "fm"):
             random_state = 0,
             verbose = False
         )
-    
+    else:
+        raise ValueError("Motor de búsqueda no conocido")
+
     best_n: int = result.x[0]
     return best_n
     
@@ -61,14 +73,49 @@ def compute_rsi(series: pd.Series, n: int) -> pd.Series:
 
     return rsi
 
-def func_to_opt(price: pd.Series, ma: pd.Series, n: int, k: int = 5) -> float:
+def func_to_opt_rsi(price: pd.Series, ma: pd.Series, n: int) -> float:
     rsi = compute_rsi(ma, n)
 
-    future_returns = price.pct_change().shift(-k)
+    future_returns = price.pct_change().shift(-horizon)
 
-    df = pd.concat([rsi, future_returns], axis=1).dropna()
+    data = pd.concat([rsi, future_returns], axis=1)
+    data.columns = ["rsi", "future_returns"]
+    data = data.dropna()
 
-    ic = df.iloc[:, 0].corr(df.iloc[:, 1])
+    ic = data["rsi"].corr(data["future_returns"])
+
+    if pd.isna(ic):
+        return 0.0
 
     return abs(ic)
 
+def compute_atr(df: pd.DataFrame, n: int) -> pd.Series:
+    high = df["high"]
+    low = df["low"]
+    close = df["close"]
+    
+    tr1 = high - low
+    tr2 = (high - close.shift()).abs()
+    tr3 = (low - close.shift()).abs()
+    
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    atr = tr.ewm(alpha=1/n, adjust=False).mean()
+    
+    return atr
+
+def func_to_opt_atr(price: pd.Series, df: pd.DataFrame, n: int) -> float:
+    atr = compute_atr(df, n)
+
+    future_returns = price.pct_change().shift(-horizon)
+
+    data = pd.concat([atr, future_returns], axis=1)
+    data.columns = ["atr", "future_returns"]
+    data = data.dropna()
+
+    ic = data["atr"].corr(data["future_returns"])
+
+    if pd.isna(ic):
+        return 0.0
+
+    return abs(ic)
