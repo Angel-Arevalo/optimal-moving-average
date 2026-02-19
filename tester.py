@@ -59,5 +59,35 @@ def profit_ratio(trade_resume: pd.Series) -> float:
     sum_losser: float = -trade_resume[trade_resume < 0].sum()
     return sum_winner/sum_losser
 
+def rsi(series: pd.Series, n: int = 14) -> pd.Series:
+    delta = series.diff()
+    
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    
+    avg_gain = gain.ewm(alpha=1/n, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1/n, adjust=False).mean()
+    
+    rs = avg_gain / avg_loss
+    
+    return 100 - (100 / (1 + rs))
+
+def atr(df: pd.DataFrame, n: int = 14) -> pd.Series:
+    
+    high = df["high"]
+    low = df["low"]
+    close = df["close"]
+    
+    tr1 = high - low
+    tr2 = (high - close.shift()).abs()
+    tr3 = (low - close.shift()).abs()
+    
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    return tr.ewm(alpha=1/n, adjust=False).mean()
+
+def atr_normalized(df: pd.DataFrame, n: int = 14) -> pd.Series:
+    return  atr(df, n)/df["close"]
+
 def get_total_money(trade_resume: pd.Series) -> float:
     return trade_resume.sum()

@@ -4,7 +4,7 @@ import pandas as pd
 from read_data import ohlc_form, read_asset
 from use_tecnics import main, simple_methods
 from tester import backtest_ma
-from numpy import exp
+from numpy import exp, log
 from typing import Union
 import warnings
 warnings.filterwarnings("ignore")
@@ -13,7 +13,7 @@ weights: list[float] = [0.3, 0.4, 0.3, 0]
 calls: int = 50
 initial_points: int = 20
 lookbacks: int = 110
-candles: int = 100
+candles: int = 1
 methods: set[str] = simple_methods
 
 
@@ -116,6 +116,31 @@ def make_search_space(methods: set[str], range_back: int, range_candle: int) -> 
     search_space: list[Categorical, Integer, Integer] = []
     search_space.append(Categorical(list(methods), name="ma_methods"))
     search_space.append(Integer(2, range_back, name="lookback"))
-    search_space.append(Integer(1, range_candle, name="candle"))
+
+    if range_candle != 1:
+        search_space.append(Integer(1, range_candle, name="candle"))
+    else:
+        search_space.append(Categorical([1], name="candle"))
 
     return search_space
+
+def log_prices(asset: Union[str, pd.DataFrame], engie: str = "fm", obj: str = "kpi") -> pd.Series:
+    if isinstance(asset, str):
+        data: pd.DataFrame =  read_asset(asset)
+    else:
+        data: pd.DataFrame = asset
+    # obtenemos una buena moving averague
+    best_method, best_lookback, best_candle = best_main(data, engie, obj)
+    
+    # Ahora vamos a conseguir el Series que le corresponde a esos 3 
+    print(best_candle)
+    data = ohlc_form(data, str(best_candle) + "min")
+    best_ma: pd.Series = main(best_method, best_lookback, data)
+    return log(best_ma).diff()
+
+def realized_variance(asset: Union[str, pd.DataFrame], periods: int = 2):
+    # para peridos intradía, es mejor usar periods pequeños,
+    # por defecto se usan 2
+    
+    prices_log: pd.Series = log_prices(asset)
+    return (prices_log ** 2).rolling(periods).sum()
