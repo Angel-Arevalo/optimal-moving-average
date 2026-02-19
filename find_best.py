@@ -2,7 +2,7 @@ from skopt import gp_minimize, forest_minimize
 from skopt.space import Real, Integer, Categorical
 import pandas as pd
 from read_data import ohlc_form, read_asset
-from use_tecnics import main, simple_methods
+from use_tecnics import main, simple_methods, complex_methods
 from tester import backtest_ma
 from numpy import exp, log
 from typing import Union
@@ -14,7 +14,7 @@ calls: int = 50
 initial_points: int = 20
 lookbacks: int = 110
 candles: int = 1
-methods: set[str] = simple_methods
+methods: set[str] = complex_methods
 
 
 def best_main(asset: Union[str, pd.DataFrame], engie: str = "gp", obj: str = "kpi") -> tuple[str, int, int]:
