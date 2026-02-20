@@ -1,6 +1,7 @@
 import talib
 import pandas as pd 
 from typing import Dict, Callable
+
 simple_methods: set = {"SMA", "EMA", "WMA", "DEMA", "TEMA", "TRIMA", "KAMA", "T3", "MIDPOINT"}
 complex_methods: set = {"MACD", "BBANDS", "DONCHIAN", "ZSCORE_EMA"}
 avalible_methods: set = simple_methods | complex_methods
