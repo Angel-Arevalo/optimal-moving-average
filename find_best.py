@@ -9,7 +9,7 @@ from typing import Union
 import warnings
 warnings.filterwarnings("ignore")
 
-weights: list[float] = [0.3, 0.4, 0.3, 0]
+weights: list[float] = [0.3, 0.4, 0.3, 0] #*hit ratio, risk-reward, profit factor, number of trades
 calls: int = 50
 initial_points: int = 20
 lookbacks: int = 110
