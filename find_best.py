@@ -14,7 +14,7 @@ calls: int = 50
 initial_points: int = 20
 lookbacks: int = 110
 candles: int = 1
-methods: set[str] = complex_methods
+methods: set[str] = simple_methods
 
 
 def best_main(asset: Union[str, pd.DataFrame], engie: str = "gp", obj: str = "kpi") -> tuple[str, int, int]:

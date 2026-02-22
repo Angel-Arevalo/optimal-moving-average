@@ -27,8 +27,8 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series) -> pd.Series:
     pre_data: pd.Series = real_data.shift(1)
     
     # Señales de cruce de moving average, 
-    signal_buy: pd.Series = ((pre_man < pre_data) & (man_back > real_data)).astype(int)
-    signal_sell: pd.Series = ((pre_man >= pre_data) & (man_back < real_data)).astype(int)
+    signal_sell: pd.Series = ((pre_man < pre_data) & (man_back > real_data)).astype(int)
+    signal_buy: pd.Series = ((pre_man >= pre_data) & (man_back < real_data)).astype(int)
 
     # En el vector de compra o venta aparece un 1 como compra, un -1 como venta
     # y 0 indica no hacer nada
