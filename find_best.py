@@ -3,7 +3,7 @@ from skopt.space import Real, Integer, Categorical
 import pandas as pd
 from read_data import ohlc_form, read_asset
 from use_tecnics import main, simple_methods, complex_methods
-from tester import backtest_ma
+from tester import backtest_ma, test_ma_rsi
 from numpy import exp, log
 from typing import Union
 import warnings
@@ -14,6 +14,7 @@ calls: int = 50
 initial_points: int = 20
 lookbacks: int = 110
 candles: int = 1
+n_rsis: int = 50
 methods: set[str] = simple_methods
 
 
@@ -86,6 +87,45 @@ def best_partition(asset: Union[str, pd.DataFrame], partitions: int = 3) -> None
         pointer += part
 
 
+
+def optimize_ma_rsi(data: pd.DataFrame, engie: str) -> tuple[str, int, int, int]:
+    if isinstance(data, str):
+        data: pd.DataFrame = read_asset(data)
+    else:
+        data: pd.DataFrame = data
+
+    def objective(params: tuple[str, int, int, int]) -> float:
+        method, lookback, vela, rsi_n = params
+
+        return -func_to_opt_rsi(data, method, lookback, vela, rsi_n)
+    
+    space = make_search_space(methods, lookbacks, candles, n_rsis)
+
+    if engie == "gp":
+        result = gp_minimize(
+                    func=objective,
+                    dimensions=space,
+                    n_calls=calls,
+                    n_initial_points=10,
+                    random_state=42,
+                )
+    if engie == "fm":
+        result = forest_minimize(
+                func=objective,
+                dimensions=space,
+                n_calls=calls,
+                n_initial_points=10,
+                random_state=0,
+                verbose=False
+        )
+
+    best_method, best_lookback, best_candle, best_n = result.x
+    return (best_method,
+            best_lookback,
+            best_candle,
+            best_n
+    )
+
 def func_to_opt(data: pd.DataFrame, method: str, lookback: int, candle: int, perform: bool = False, obj: str = "kpi") -> float:
     ohlc: pd.DataFrame = ohlc_form(data, str(candle) + "min")
     ma_perform: pd.Series = main(method, lookback, ohlc)
@@ -101,9 +141,22 @@ def func_to_opt(data: pd.DataFrame, method: str, lookback: int, candle: int, per
     
     return 0
 
+def func_to_opt_rsi(data: pd.DataFrame, method: str, lookback: int, cand: int, rsi_n: int) -> float:
+    ohlc: pd.DataFrame = ohlc_form(data, str(cand) + "min")
+    ma_perform: pd.Series = main(method, lookback, ohlc)
+
+    hr, rr, pr, tr = test_ma_rsi(ohlc["close"], ma_perform, rsi_n)
+
+    if tr < 5:
+        return 0
+
+    score = (hr * rr * pr) / (1 + 1/tr)
+    return score
+
+
 # La cota inferior de range_back es 2 y la de range_candle es 1. La cota máxima depende 
 # de los datos usados
-def make_search_space(methods: set[str], range_back: int, range_candle: int) -> list[Categorical, Integer, Integer]:
+def make_search_space(methods: set[str], range_back: int, range_candle: int, range_rsi: int = None) -> list[Categorical, Integer, Integer]:
     if methods == None or len(methods) == 0:
         raise ValueError("Lista de métodos no aceptada")
 
@@ -112,6 +165,9 @@ def make_search_space(methods: set[str], range_back: int, range_candle: int) -> 
 
     if range_candle <= 0:
         raise ValueError("Inválido espacio de búsqueda para vela")
+    
+    if range_rsi != None and range_rsi <= 1:
+        raise ValueError("Inválido espacio de búsqueda para parámetro de RSI")
 
     search_space: list[Categorical, Integer, Integer] = []
     search_space.append(Categorical(list(methods), name="ma_methods"))
@@ -121,6 +177,12 @@ def make_search_space(methods: set[str], range_back: int, range_candle: int) -> 
         search_space.append(Integer(1, range_candle, name="candle"))
     else:
         search_space.append(Categorical([1], name="candle"))
+
+    if range_rsi != None:
+        if range_rsi ==2:
+            search_space.append(Categorical([2], name="rsi_v"))
+        else:
+            search_space.append(Integer(2, range_rsi, name="rsi_v"))
 
     return search_space
 

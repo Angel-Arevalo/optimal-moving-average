@@ -6,7 +6,7 @@ def read_asset(asset_name: str) -> pd.DataFrame:
     if asset_name[-1] == "v":
         asset_info: pd.DataFrame =  pd.read_csv(f"Data//{asset_name}")
     elif asset_name[-1] == "t":
-        asset_info: pd.DataFrame = pd.read_parquet(f"Data//{asset_name}")
+        asset_info: pd.DataFrame = pd.read_parquet(f"Data/{asset_name}")
         asset_info.rename(columns = {"Date+Time": "time"}, inplace=True)
 
     asset_info["time"] = pd.to_datetime(asset_info["time"])

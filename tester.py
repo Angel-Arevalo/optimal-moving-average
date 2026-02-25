@@ -9,6 +9,7 @@ def backtest_ma(man_back: pd.Series, real_data: pd.Series, obj: str = "kpi") -> 
     prices_and_signals: pd.DataFrame = pd.concat([vector_buy, real_data], axis=1, join="inner")
     prices_and_signals.columns = ["Signals", "Prices"]
     
+
     prices_and_signals["trade"] = (prices_and_signals["Prices"].shift(-1) - prices_and_signals["Prices"])*prices_and_signals["Signals"]
     prices_and_signals["trade"] = prices_and_signals["trade"].fillna(0)
     
@@ -21,6 +22,29 @@ def backtest_ma(man_back: pd.Series, real_data: pd.Series, obj: str = "kpi") -> 
     if obj == "mon":
         return get_total_money(prices_and_signals["trade"])
 
+def test_ma_rsi(data: pd.Series, moving_averague: pd.Series, rsi_factor: int) -> tuple[float, float, float, int]:
+    signal_cross: pd.Series = get_vector_buys(moving_averague, data)
+    rsi: pd.Series = get_rsi(data, rsi_factor)
+    
+    buy_signal: pd.Series = ((signal_cross == 1) & (rsi > 30)).astype(int)
+    sell_signal: pd.Series = ((signal_cross == -1) & (rsi < 70)).astype(int)
+
+    signal_cross = buy_signal - sell_signal
+    signal_cross = signal_cross[signal_cross != 0]
+    signal_cross = signal_cross[signal_cross != signal_cross.shift(-1)]
+
+    prices_signals: pd.DataFrame = pd.concat([signal_cross, data], axis=1, join="inner")
+    prices_signals.columns = ["Signals", "Prices"]
+    
+    prices_signals["trade"] = (prices_signals["Prices"].shift(-1) - prices_signals["Prices"])*prices_signals["Signals"]
+    prices_signals["trade"] = prices_signals["trade"].fillna(0)
+    trade_resume: pd.Series = prices_signals.loc[prices_signals["Signals"] != 0, "trade"]
+
+    return (hit_ratio(trade_resume),
+            rr_ratio(trade_resume),
+            profit_ratio(trade_resume),
+            len(trade_resume)
+            )
 
 def get_vector_buys(man_back: pd.Series, real_data: pd.Series) -> pd.Series:
     pre_man: pd.Series = man_back.shift(1)
@@ -59,18 +83,19 @@ def profit_ratio(trade_resume: pd.Series) -> float:
     sum_losser: float = -trade_resume[trade_resume < 0].sum()
     return sum_winner/sum_losser
 
-def rsi(series: pd.Series, n: int = 14) -> pd.Series:
-    delta = series.diff()
-    
+def get_rsi(data: pd.Series, n: int) -> pd.Series:
+    delta = data.diff()
+
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
-    
+
     avg_gain = gain.ewm(alpha=1/n, adjust=False).mean()
     avg_loss = loss.ewm(alpha=1/n, adjust=False).mean()
-    
-    rs = avg_gain / avg_loss
-    
-    return 100 - (100 / (1 + rs))
+
+    rs = avg_gain.div(avg_loss.replace(0, 1e-10))
+    rsi = 100 - (100 / (1 + rs))
+
+    return rsi
 
 def atr(df: pd.DataFrame, n: int = 14) -> pd.Series:
     
