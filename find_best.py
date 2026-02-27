@@ -4,16 +4,16 @@ import pandas as pd
 from read_data import ohlc_form, read_asset
 from use_tecnics import main, simple_methods, complex_methods
 from tester import backtest_ma, test_ma_rsi
-from numpy import exp, log
+from numpy import exp, log, sqrt
 from typing import Union
 import warnings
 warnings.filterwarnings("ignore")
 
 weights: list[float] = [0.3, 0.4, 0.3, 0] #*hit ratio, risk-reward, profit factor, number of trades
-calls: int = 50
+calls: int = 40
 initial_points: int = 20
 lookbacks: int = 110
-candles: int = 1
+candles: int = 100
 n_rsis: int = 50
 methods: set[str] = simple_methods
 
@@ -88,7 +88,7 @@ def best_partition(asset: Union[str, pd.DataFrame], partitions: int = 3) -> None
 
 
 
-def optimize_ma_rsi(data: pd.DataFrame, engie: str) -> tuple[str, int, int, int]:
+def optimize_ma_rsi(data: pd.DataFrame, engie: str = "fm") -> tuple[str, int, int, int]:
     if isinstance(data, str):
         data: pd.DataFrame = read_asset(data)
     else:
@@ -147,10 +147,17 @@ def func_to_opt_rsi(data: pd.DataFrame, method: str, lookback: int, cand: int, r
 
     hr, rr, pr, tr = test_ma_rsi(ohlc["close"], ma_perform, rsi_n)
 
-    if tr < 5:
-        return 0
+    if tr <= 1:
+        return -1.0 
 
-    score = (hr * rr * pr) / (1 + 1/tr)
+    loss_ratio = 1.0 - hr
+    expectancy = (hr * rr) - loss_ratio
+
+    score = expectancy * sqrt(tr)
+
+    if pr > 0:
+        score += log(pr)
+
     return score
 
 

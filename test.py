@@ -1,11 +1,25 @@
-from read_data import read_asset, ohlc_form, parse_to_form
-from plot_ import main_plot
+import pandas as pd
+import read_data
+import find_best
 from use_tecnics import main
-from rsi_opt import optimizer
-from find_best import best_partition
+from tester import test_ma_rsi
+from plot_ import main_plot
 
-#data = read_asset("EURUSD_2025-2026.csv")
+nombre_activo: str = "EURUSD.parquet"
+data: pd.DataFrame = read_data.read_asset(nombre_activo)
 
-#best_partition(data, 10)
+#find_best.methods = {"EMA"}
+find_best.candles = 3
+method, lookback, candle, n_rsi = find_best.optimize_ma_rsi(data)
 
-parse_to_form("EURUSD_2025-2026.csv")
+print(method, lookback, candle, n_rsi)
+
+ohlc = read_data.ohlc_form(data, str(candle) + "min")
+
+moving_averague: pd.Series = main(method, lookback, ohlc)
+
+ht, rr, pr, tr = test_ma_rsi(ohlc["close"], moving_averague, n_rsi)
+
+print(ht, rr, pr, tr)
+print(-find_best.func_to_opt_rsi(data, method, lookback, candle, n_rsi))
+#main_plot(data, lookback, candle, method)
