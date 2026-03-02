@@ -1,11 +1,13 @@
 import talib
 import pandas as pd 
 from typing import Dict, Callable, Union
+from tester import get_vector_buys
 
 simple_methods: set = {"SMA", "EMA", "WMA", "DEMA", "TEMA", "TRIMA", "KAMA", "T3", "MIDPOINT"}
-complex_methods: set = {"MACD", "BBANDS", "DONCHIAN", "ZSCORE_EMA"}
-avalible_methods: set = simple_methods | complex_methods
+complex_methods: set = {"MACD", "BBANDS", "DONCHIAN", "ZSCORE_EMA"} avalible_methods: set = simple_methods | complex_methods
 
+
+# actualmente este método va a retornar el vector de compras y ventas
 def main(method: str, data: pd.DataFrame, adicional_data: Union[list, int]) -> pd.Series:
     if method not in avalible_methods:
         raise ValueError("Not avalible method")
@@ -14,15 +16,21 @@ def main(method: str, data: pd.DataFrame, adicional_data: Union[list, int]) -> p
         raise ValueError("Todo método simple usa solo lookback")
     
     if method in simple_methods:
-        return SIMPLE_METHODS[method](data["close"], adicional_data).bfill()
+        ma: pd.Series = SIMPLE_METHODS[method](data["close"], adicional_data).bfill()
+        ma = get_vector_buys(ma, data["close"])
+
     else:
         if method == "MACD":
             # en adicional_data se espera así
             # slowperiod, fastperiod, signal_back 
-            return COMPLEX_METHODS[method](data["close"], 
+            ma: pd.Series = COMPLEX_METHODS[method](data["close"], 
                                            adicional_data[0], 
                                            adicional_data[1],
                                            adicional_data[2]).bfill()
+
+    ma = pd.concat([ma, data["close"]], axis = 1, join = "inner")
+    ma.columns = ["Signals", "Prices"]
+    return ma
 
 # Esta función me permite guardar una correspondencia entre
 # Strings y funciones de TAB-Lib 
@@ -93,15 +101,8 @@ def macd(prices: pd.Series, lookback_max: int, lookback_min: int, signal_back: i
 
     macd = pd.Series(macd, index=prices.index)
     macdsignal = pd.Series(macdsignal, index=prices.index)
-
-    pre_macd: pd.Series = macd.shift(1)
-    pre_macdsignal: pd.Series = macdsignal.shift(1)
-
-    signal_buy: pd.Series = ((pre_macd < pre_macdsignal) & (macd >= macdsignal)).astype(int)
-    signal_sell: pd.Series = ((pre_macd >= pre_macdsignal) & (macd < macdsignal)).astype(int)
-
-    vector_signals: pd.Series = signal_buy - signal_sell
-    return vector_signals[vector_signals != 0]
+    
+    return get_vector_buys(macdsignal, macd)
 
 @_all_methods("BBANDS")
 def bbands(prices: pd.Series, lookback: int) -> pd.Series:
