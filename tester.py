@@ -31,8 +31,23 @@ def test_ma_rsi(data: pd.Series, moving_averague: pd.Series, rsi_factor: int) ->
 
     signal_cross = buy_signal - sell_signal
     signal_cross = signal_cross[signal_cross != 0]
-    signal_cross = signal_cross[signal_cross != signal_cross.shift(-1)]
 
+    temp_df = pd.DataFrame({
+        'Signals': signal_cross,
+        'Prices': data.loc[signal_cross.index]
+    })
+    
+    temp_df['group'] = (temp_df['Signals'] != temp_df['Signals'].shift(1)).cumsum()
+    
+    idx_buys = temp_df[temp_df['Signals'] == 1].groupby('group')['Prices'].idxmin()
+    
+    idx_sells = temp_df[temp_df['Signals'] == -1].groupby('group')['Prices'].idxmax()
+    
+    best_indices = idx_buys.tolist() + idx_sells.tolist()
+    best_indices.sort()
+    
+    signal_cross = temp_df.loc[best_indices, 'Signals']
+    
     prices_signals: pd.DataFrame = pd.concat([signal_cross, data], axis=1, join="inner")
     prices_signals.columns = ["Signals", "Prices"]
     

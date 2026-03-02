@@ -9,7 +9,6 @@ from typing import Union
 import warnings
 warnings.filterwarnings("ignore")
 
-weights: list[float] = [0.3, 0.4, 0.3, 0] #*hit ratio, risk-reward, profit factor, number of trades
 calls: int = 40
 initial_points: int = 20
 lookbacks: int = 110
@@ -73,7 +72,7 @@ def best_partition(asset: Union[str, pd.DataFrame], partitions: int = 3) -> None
         print("resultados preliminares de entrenamiento", bets_sub)
 
         ohlc_data: pd.DataFrame = ohlc_form(data, str(bets_sub[2]) + "min")
-        ma_perform: pd.Series = main(bets_sub[0], bets_sub[1], ohlc_data)
+        ma_perform: pd.Series = main(bets_sub[0], ohlc_data, bets_sub[1])
 
         kpis: tuple[float, float, float, int] = backtest_ma(ma_perform, ohlc_data["close"], "kpi")
 
@@ -128,7 +127,7 @@ def optimize_ma_rsi(data: pd.DataFrame, engie: str = "fm") -> tuple[str, int, in
 
 def func_to_opt(data: pd.DataFrame, method: str, lookback: int, candle: int, perform: bool = False, obj: str = "kpi") -> float:
     ohlc: pd.DataFrame = ohlc_form(data, str(candle) + "min")
-    ma_perform: pd.Series = main(method, lookback, ohlc)
+    ma_perform: pd.Series = main(method, ohlc, lookback)
     if obj == "kpi":
         hr, rr, pr, tr = backtest_ma(ma_perform, ohlc["close"])
     
@@ -143,7 +142,7 @@ def func_to_opt(data: pd.DataFrame, method: str, lookback: int, candle: int, per
 
 def func_to_opt_rsi(data: pd.DataFrame, method: str, lookback: int, cand: int, rsi_n: int) -> float:
     ohlc: pd.DataFrame = ohlc_form(data, str(cand) + "min")
-    ma_perform: pd.Series = main(method, lookback, ohlc)
+    ma_perform: pd.Series = main(method, ohlc, lookback)
 
     hr, rr, pr, tr = test_ma_rsi(ohlc["close"], ma_perform, rsi_n)
 
@@ -204,7 +203,7 @@ def log_prices(asset: Union[str, pd.DataFrame], engie: str = "fm", obj: str = "k
     # Ahora vamos a conseguir el Series que le corresponde a esos 3 
     print(best_candle)
     data = ohlc_form(data, str(best_candle) + "min")
-    best_ma: pd.Series = main(best_method, best_lookback, data)
+    best_ma: pd.Series = main(best_method, data, best_lookback)
     return log(best_ma).diff()
 
 def realized_variance(asset: Union[str, pd.DataFrame], periods: int = 2):

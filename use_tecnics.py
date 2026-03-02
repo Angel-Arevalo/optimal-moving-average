@@ -1,18 +1,28 @@
 import talib
 import pandas as pd 
-from typing import Dict, Callable
+from typing import Dict, Callable, Union
+
 simple_methods: set = {"SMA", "EMA", "WMA", "DEMA", "TEMA", "TRIMA", "KAMA", "T3", "MIDPOINT"}
 complex_methods: set = {"MACD", "BBANDS", "DONCHIAN", "ZSCORE_EMA"}
 avalible_methods: set = simple_methods | complex_methods
 
-def main(method: str, lookback: int, data: pd.DataFrame) -> pd.Series:
+def main(method: str, data: pd.DataFrame, adicional_data: Union[list, int]) -> pd.Series:
     if method not in avalible_methods:
         raise ValueError("Not avalible method")
+
+    if isinstance(adicional_data, int) and method in complex_methods:
+        raise ValueError("Todo método simple usa solo lookback")
     
     if method in simple_methods:
-        return SIMPLE_METHODS[method](data["close"], lookback).bfill()
+        return SIMPLE_METHODS[method](data["close"], adicional_data).bfill()
     else:
-        return COMPLEX_METHODS[method](data["close"], lookback).bfill()
+        if method == "MACD":
+            # en adicional_data se espera así
+            # slowperiod, fastperiod, signal_back 
+            return COMPLEX_METHODS[method](data["close"], 
+                                           adicional_data[0], 
+                                           adicional_data[1],
+                                           adicional_data[2]).bfill()
 
 # Esta función me permite guardar una correspondencia entre
 # Strings y funciones de TAB-Lib 
@@ -73,11 +83,25 @@ def midpoint(prices: pd.Series, lookback: int) -> pd.Series:
 
 # conjunto de funciones complejas
 @_all_methods("MACD")
-def macd(prices: pd.Series, lookback: int) -> pd.Series:
-    fast = int(lookback / 2.16)
-    signal = 9
-    macd, macdsignal, _ = talib.MACD(prices.to_numpy(float), fast, lookback, signal)
-    return pd.Series(macdsignal, index=prices.index)
+def macd(prices: pd.Series, lookback_max: int, lookback_min: int, signal_back: int) -> pd.Series:
+    macd, macdsignal, _ = talib.MACD(
+                       prices.to_numpy(float), 
+                       fastperiod=lookback_min, 
+                       slowperiod=lookback_max, 
+                       signalperiod=signal_back
+                     )
+
+    macd = pd.Series(macd, index=prices.index)
+    macdsignal = pd.Series(macdsignal, index=prices.index)
+
+    pre_macd: pd.Series = macd.shift(1)
+    pre_macdsignal: pd.Series = macdsignal.shift(1)
+
+    signal_buy: pd.Series = ((pre_macd < pre_macdsignal) & (macd >= macdsignal)).astype(int)
+    signal_sell: pd.Series = ((pre_macd >= pre_macdsignal) & (macd < macdsignal)).astype(int)
+
+    vector_signals: pd.Series = signal_buy - signal_sell
+    return vector_signals[vector_signals != 0]
 
 @_all_methods("BBANDS")
 def bbands(prices: pd.Series, lookback: int) -> pd.Series:
