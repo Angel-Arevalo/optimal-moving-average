@@ -4,11 +4,12 @@ from typing import Dict, Callable, Union
 from tester import get_vector_buys
 
 simple_methods: set = {"SMA", "EMA", "WMA", "DEMA", "TEMA", "TRIMA", "KAMA", "T3", "MIDPOINT"}
-complex_methods: set = {"MACD", "BBANDS", "DONCHIAN", "ZSCORE_EMA"} avalible_methods: set = simple_methods | complex_methods
+complex_methods: set = {"MACD", "BBANDS", "DONCHIAN", "ZSCORE_EMA"} 
+avalible_methods: set = simple_methods | complex_methods
 
 
 # actualmente este método va a retornar el vector de compras y ventas
-def main(method: str, data: pd.DataFrame, adicional_data: Union[list, int]) -> pd.Series:
+def main(method: str, data: pd.DataFrame, adicional_data: Union[list, int]) -> pd.DataFrame:
     if method not in avalible_methods:
         raise ValueError("Not avalible method")
 
@@ -16,17 +17,40 @@ def main(method: str, data: pd.DataFrame, adicional_data: Union[list, int]) -> p
         raise ValueError("Todo método simple usa solo lookback")
     
     if method in simple_methods:
-        ma: pd.Series = SIMPLE_METHODS[method](data["close"], adicional_data).bfill()
+        ma: pd.Series = SIMPLE_METHODS[method](data["close"], adicional_data)
         ma = get_vector_buys(ma, data["close"])
 
     else:
         if method == "MACD":
             # en adicional_data se espera así
             # slowperiod, fastperiod, signal_back 
-            ma: pd.Series = COMPLEX_METHODS[method](data["close"], 
-                                           adicional_data[0], 
-                                           adicional_data[1],
-                                           adicional_data[2]).bfill()
+            ma: pd.Series = macd(data["close"], 
+                                adicional_data[0], 
+                                adicional_data[1],
+                                adicional_data[2])
+
+        elif method == "BBANDS":
+            # en adicional_data se espera así
+            # lookback, dev_up, dev_dn, matype
+            ma: pd.Series = bbands(data["close"],
+                                   adicional_data[0],
+                                   adicional_data[1],
+                                   adicional_data[2],
+                                   adicional_data[3])
+
+        elif method == "DONCHIAN":
+            ma: pd.Series = donchian(data["close"], 
+                                     adicional_data[0], 
+                                     adicional_data[1])
+
+        elif method == "ZSCORE_EMA":
+            ma: pd.Series = z_score_ema(data["close"],
+                                        adicional_data[0],
+                                        adicional_data[1],
+                                        adicional_data[2])
+
+        else:
+            raise ValueError(f"{method} no implementado")
 
     ma = pd.concat([ma, data["close"]], axis = 1, join = "inner")
     ma.columns = ["Signals", "Prices"]
@@ -101,21 +125,62 @@ def macd(prices: pd.Series, lookback_max: int, lookback_min: int, signal_back: i
 
     macd = pd.Series(macd, index=prices.index)
     macdsignal = pd.Series(macdsignal, index=prices.index)
-    
+
     return get_vector_buys(macdsignal, macd)
 
 @_all_methods("BBANDS")
-def bbands(prices: pd.Series, lookback: int) -> pd.Series:
-    upper, middle, lower = talib.BBANDS(prices.to_numpy(float), timeperiod=lookback, nbdevup=2.0, nbdevdn=2.0)
-    return pd.Series(middle, index=prices.index)
+def bbands(prices: pd.Series, lookback: int, dev_up: float, dev_dn: float, matype: int = 0) -> pd.Series:
+    upper, middle, lower = talib.BBANDS(
+        prices.to_numpy(float), 
+        timeperiod=lookback, 
+        nbdevup=dev_up, 
+        nbdevdn=dev_dn,
+        matype=matype
+    )
+
+    upper = pd.Series(upper, index=prices.index)
+    lower = pd.Series(lower, index=prices.index)
+
+    pre_prices = prices.shift(1)
+    pre_lower = lower.shift(1)
+    pre_upper = upper.shift(1)
+
+    signal_buy = ((pre_prices > pre_lower) & (prices <= lower)).astype(int)
+
+    signal_sell = ((pre_prices < pre_upper) & (prices >= upper)).astype(int)
+
+    vector_signals = signal_buy - signal_sell
+    return vector_signals[vector_signals != 0]
 
 @_all_methods("DONCHIAN")
-def donchian(prices: pd.Series, lookback: int) -> pd.Series:
-    upper = prices.rolling(window=lookback).max()
-    return pd.Series(upper, index=prices.index)
+def donchian(prices: pd.Series, lookback_upper: int, lookback_lower: int) -> pd.Series:
+    if lookback_lower is None:
+        lookback_lower = lookback_upper
+        
+    upper = prices.shift(1).rolling(window=lookback_upper).max()
+    lower = prices.shift(1).rolling(window=lookback_lower).min()
+    
+    signal_buy = (prices > upper).astype(int)
+    signal_sell = (prices < lower).astype(int)
+    
+    vector_signals = signal_buy - signal_sell
+    vector_signals = vector_signals[vector_signals != 0]
+    return vector_signals[vector_signals != vector_signals.shift(1)]
 
 @_all_methods("ZSCORE_EMA")
-def z_score_ema(prices: pd.Series, lookback: int):
-    ema = talib.EMA(prices.to_numpy(float), timeperiod=lookback)
+def z_score_ema(prices: pd.Series, lookback: int, threshold: float, matype: int) -> pd.Series:
+    ma = talib.MA(prices.to_numpy(float), timeperiod=lookback, matype=matype)
     std = prices.rolling(window=lookback).std()
-    return (prices - ema) / std
+    
+    z_score = pd.Series((prices - ma) / std, index=prices.index)
+    pre_z = z_score.shift(1)
+    
+    if threshold == 0.0:
+        signal_buy = ((pre_z < 0) & (z_score >= 0)).astype(int)
+        signal_sell = ((pre_z > 0) & (z_score <= 0)).astype(int)
+    else:
+        signal_buy = ((pre_z < -threshold) & (z_score >= -threshold)).astype(int)
+        signal_sell = ((pre_z > threshold) & (z_score <= threshold)).astype(int)
+    
+    vector_signals = signal_buy - signal_sell
+    return vector_signals[vector_signals != 0]
