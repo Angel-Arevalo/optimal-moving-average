@@ -129,7 +129,7 @@ def macd(prices: pd.Series, lookback_max: int, lookback_min: int, signal_back: i
     return get_vector_buys(macdsignal, macd)
 
 @_all_methods("BBANDS")
-def bbands(prices: pd.Series, lookback: int, dev_up: float, dev_dn: float, matype: int = 0) -> pd.Series:
+def bbands(prices: pd.Series, lookback: int, dev_up: float, dev_dn: float, matype: int) -> pd.Series:
     upper, middle, lower = talib.BBANDS(
         prices.to_numpy(float), 
         timeperiod=lookback, 
@@ -156,13 +156,13 @@ def bbands(prices: pd.Series, lookback: int, dev_up: float, dev_dn: float, matyp
 def donchian(prices: pd.Series, lookback_upper: int, lookback_lower: int) -> pd.Series:
     if lookback_lower is None:
         lookback_lower = lookback_upper
-        
+
     upper = prices.shift(1).rolling(window=lookback_upper).max()
     lower = prices.shift(1).rolling(window=lookback_lower).min()
-    
+
     signal_buy = (prices > upper).astype(int)
     signal_sell = (prices < lower).astype(int)
-    
+
     vector_signals = signal_buy - signal_sell
     vector_signals = vector_signals[vector_signals != 0]
     return vector_signals[vector_signals != vector_signals.shift(1)]
@@ -171,16 +171,16 @@ def donchian(prices: pd.Series, lookback_upper: int, lookback_lower: int) -> pd.
 def z_score_ema(prices: pd.Series, lookback: int, threshold: float, matype: int) -> pd.Series:
     ma = talib.MA(prices.to_numpy(float), timeperiod=lookback, matype=matype)
     std = prices.rolling(window=lookback).std()
-    
+
     z_score = pd.Series((prices - ma) / std, index=prices.index)
     pre_z = z_score.shift(1)
-    
+
     if threshold == 0.0:
         signal_buy = ((pre_z < 0) & (z_score >= 0)).astype(int)
         signal_sell = ((pre_z > 0) & (z_score <= 0)).astype(int)
     else:
         signal_buy = ((pre_z < -threshold) & (z_score >= -threshold)).astype(int)
         signal_sell = ((pre_z > threshold) & (z_score <= threshold)).astype(int)
-    
+
     vector_signals = signal_buy - signal_sell
     return vector_signals[vector_signals != 0]

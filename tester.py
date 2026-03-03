@@ -3,57 +3,29 @@ from numpy import float64
 
 # Se retornan los kpi's en una tupla con este orden: hit ratio, risk reward ratio, profit ratio
 
-def backtest_ma(man_back: pd.Series, real_data: pd.Series, obj: str = "kpi") -> tuple[float, float, float, float]:
-    vector_buy: pd.Series = get_vector_buys(man_back, real_data)
+def backtest(signals_and_prices: pd.DataFrame, rsi_factor: int = None, data: pd.Series = None):
+    if rsi_factor is not None:
+        if data is None:
+            raise ValueError("Imposible sacar el rsi sin imforación")
 
-    prices_and_signals: pd.DataFrame = pd.concat([vector_buy, real_data], axis=1, join="inner")
-    prices_and_signals.columns = ["Signals", "Prices"]
-    
+        rsi: pd.Series = get_rsi(data, rsi_factor)
 
-    prices_and_signals["trade"] = (prices_and_signals["Prices"].shift(-1) - prices_and_signals["Prices"])*prices_and_signals["Signals"]
-    prices_and_signals["trade"] = prices_and_signals["trade"].fillna(0)
-    
-    if obj == "kpi":
-        return (hit_ratio(prices_and_signals["trade"]), 
-                rr_ratio(prices_and_signals["trade"]),
-                profit_ratio(prices_and_signals["trade"]),
-                len(prices_and_signals["Signals"]))
+        buy_signal: pd.Series = ((signals_and_prices["Signals"] == 1) & (rsi > 30)).astype(int)
+        sell_signal: pd.Series = ((signals_and_prices["Signals"] == -1) & (rsi < 70)).astype(int)
 
-    if obj == "mon":
-        return get_total_money(prices_and_signals["trade"])
+        signal_cross = buy_signal - sell_signal
+        signal_cross = signal_cross[signal_cross != 0]
 
-def test_ma_rsi(data: pd.Series, moving_averague: pd.Series, rsi_factor: int) -> tuple[float, float, float, int]:
-    signal_cross: pd.Series = get_vector_buys(moving_averague, data)
-    rsi: pd.Series = get_rsi(data, rsi_factor)
-    
-    buy_signal: pd.Series = ((signal_cross == 1) & (rsi > 30)).astype(int)
-    sell_signal: pd.Series = ((signal_cross == -1) & (rsi < 70)).astype(int)
+        signal_cross = signal_cross[signal_cross != signal_cross.shift(1)]
 
-    signal_cross = buy_signal - sell_signal
-    signal_cross = signal_cross[signal_cross != 0]
+        signals_and_prices = pd.DataFrame({"Signals": signal_cross,
+                                           "Prices": signals_and_prices["Prices"].loc[signal_cross.index]
+                                           })
 
-    temp_df = pd.DataFrame({
-        'Signals': signal_cross,
-        'Prices': data.loc[signal_cross.index]
-    })
-    
-    temp_df['group'] = (temp_df['Signals'] != temp_df['Signals'].shift(1)).cumsum()
-    
-    idx_buys = temp_df[temp_df['Signals'] == 1].groupby('group')['Prices'].idxmin()
-    
-    idx_sells = temp_df[temp_df['Signals'] == -1].groupby('group')['Prices'].idxmax()
-    
-    best_indices = idx_buys.tolist() + idx_sells.tolist()
-    best_indices.sort()
-    
-    signal_cross = temp_df.loc[best_indices, 'Signals']
-    
-    prices_signals: pd.DataFrame = pd.concat([signal_cross, data], axis=1, join="inner")
-    prices_signals.columns = ["Signals", "Prices"]
-    
-    prices_signals["trade"] = (prices_signals["Prices"].shift(-1) - prices_signals["Prices"])*prices_signals["Signals"]
-    prices_signals["trade"] = prices_signals["trade"].fillna(0)
-    trade_resume: pd.Series = prices_signals.loc[prices_signals["Signals"] != 0, "trade"]
+    signals_and_prices["Trade"] = (signals_and_prices["Prices"].shift(-1) - signals_and_prices["Prices"])*signals_and_prices["Signals"]
+    signals_and_prices["Trade"] = signals_and_prices["Trade"].fillna(0)
+
+    trade_resume: pd.Series = signals_and_prices.loc[signals_and_prices["Signals"] != 0, "Trade"]
 
     return (hit_ratio(trade_resume),
             rr_ratio(trade_resume),
