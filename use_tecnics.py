@@ -15,8 +15,11 @@ def main(method: str, data: pd.DataFrame, adicional_data: Union[list, int]) -> p
 
     if isinstance(adicional_data, int) and method in complex_methods:
         raise ValueError("Todo método simple usa solo lookback")
-    
+
     if method in simple_methods:
+        if isinstance(adicional_data, list):
+            adicional_data = adicional_data[0]
+
         ma: pd.Series = SIMPLE_METHODS[method](data["close"], adicional_data)
         ma = get_vector_buys(ma, data["close"])
 

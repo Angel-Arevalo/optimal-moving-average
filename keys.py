@@ -1,7 +1,7 @@
 from use_tecnics import avalible_methods
 
 # llaves para las llamadas del optimizador
-calls: int = 40
+calls: int = 100
 initial_points: int = 20
 
 

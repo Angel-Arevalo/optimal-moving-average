@@ -56,8 +56,14 @@ def opti_main(data: Union[pd.DataFrame, str], engie: str = "fm",max_rsi: int = N
 
             return -score
 
-        best_results.append({method: optimizer(objective, space, engie)})
-
+        result: list = optimizer(objective, space, engie)
+        result.insert(0, method)
+        best_results.append(result)
+    
+    if max_rsi is None:
+        read_results(best_results, data)
+    else:
+        read_results(best_results, data, max_rsi)
     return best_results
 
 
@@ -142,3 +148,21 @@ def make_search_space(method: str, range_rsi: int = None) -> list:
             search_space.append(Integer(2, range_rsi, name="rsi_v"))
 
     return search_space
+
+# Cada resultado tiene la forma [metodo, candle, añadidos]
+def read_results(results: list[dict], real_data: pd.DataFrame, rsi: bool = False) -> None:
+
+    for result in results:
+        ohlc = ohlc_form(real_data, str(result[1]) + "min")
+
+        vector_perform: pd.DataFrame = main(result[0], ohlc, result[2:])
+
+        if not rsi:
+            hr, rr, pr, tr = backtest(vector_perform)
+
+        else:
+            hr, rr, pr, tr = backtest(vector_perform, result[-1], real_data)
+
+        print("Redimiento de una ma con:")
+        print(f"método: {result[0]}, vela: {result[1]}")
+        print(f"hit ratio: {hr}\nrisk reward: {rr}\nprofit factor: {pr}\ntrades: {tr}\n\n")
