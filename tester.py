@@ -58,17 +58,25 @@ def hit_ratio(trade_resume: pd.Series) -> float:
 
     return counter/len(trade_resume)
 
-# es una medida que me dice cuánto gano en promedio comparado con las perdidas
 def rr_ratio(trade_resume: pd.Series) -> float:
-    prom_winner: float = trade_resume[trade_resume > 0].mean()
-    prom_losser: float = -trade_resume[trade_resume < 0].mean()
-    return prom_winner/prom_losser
+    winners = trade_resume[trade_resume > 0]
+    losers = trade_resume[trade_resume < 0]
 
-# Similar al risk reward pero no en promedio
+    if winners.empty or losers.empty:
+        return 0.0
+
+    prom_winner = winners.mean()
+    prom_losser = -losers.mean()
+    return prom_winner / prom_losser
+
 def profit_ratio(trade_resume: pd.Series) -> float:
-    sum_winner: float = trade_resume[trade_resume > 0].sum()
-    sum_losser: float = -trade_resume[trade_resume < 0].sum()
-    return sum_winner/sum_losser
+    winners = trade_resume[trade_resume > 0]
+    losers = trade_resume[trade_resume < 0]
+
+    if winners.empty or losers.empty or losers.sum() == 0:
+        return 0.0
+
+    return winners.sum() / (-losers.sum())
 
 def get_rsi(data: pd.Series, n: int) -> pd.Series:
     delta = data.diff()
