@@ -13,5 +13,5 @@ hr, rr, pf, tr = tester.backtest(signals)
 
 print(hr, rr, pf, tr)
 """
-
-find_best.opti_main("Data_total_EURUSD.csv")
+keys.methods = {"SMA", "EMA", "MACD"}
+print(find_best.opti_main("EURUSD.parquet"))

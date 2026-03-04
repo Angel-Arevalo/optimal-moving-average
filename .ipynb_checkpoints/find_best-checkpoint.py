@@ -1,208 +1,168 @@
 from skopt import gp_minimize, forest_minimize
 from skopt.space import Real, Integer, Categorical
 import pandas as pd
+
 from read_data import ohlc_form, read_asset
-from use_tecnics import main, simple_methods, complex_methods
-from tester import backtest_ma, test_ma_rsi
-from numpy import exp, log
-from typing import Union
+from use_tecnics import main, complex_methods, avalible_methods
+from tester import backtest
+
+from numpy import exp, log, sqrt
+from typing import Union, Callable
+
+import keys
 import warnings
 warnings.filterwarnings("ignore")
 
-weights: list[float] = [0.3, 0.4, 0.3, 0] #*hit ratio, risk-reward, profit factor, number of trades
-calls: int = 50
-initial_points: int = 20
-lookbacks: int = 110
-candles: int = 100
-n_rsis: int = 50
-methods: set[str] = simple_methods
 
-
-def best_main(asset: Union[str, pd.DataFrame], engie: str = "gp", obj: str = "kpi") -> tuple[str, int, int]:
-    if isinstance(asset, str):
-        data: pd.DataFrame = read_asset(asset)
-    else:
-        data: pd.DataFrame = asset
-        
-    # función auxiliar para la optimización
-    def objective(params: tuple[str, int, int]) -> float:
-        method, lookback, vela = params
-
-        return -func_to_opt(data, method, lookback, vela, False, obj)
-    
-    space: list[Categorical, Integer, Integer] = make_search_space(methods, lookbacks, candles)
-
-    if engie == "gp":
-        result = gp_minimize(
-                    func=objective,
-                    dimensions=space,
-                    n_calls=calls,
-                    n_initial_points=10,
-                    random_state=42,
-                )
-    if engie == "fm":
-        result = forest_minimize(
-                func=objective,
-                dimensions=space,
-                n_calls=calls,
-                n_initial_points=10,
-                random_state=0,
-                verbose=False
-        )
-    
-    
-    best_method, best_lookback, best_candle = result.x
-    best_obj_value = result.fun
-    best_score = -best_obj_value
-
-    return (best_method, best_lookback, best_candle)
-
-def best_partition(asset: Union[str, pd.DataFrame], partitions: int = 3) -> None:
-    if isinstance(asset, str):
-        data: pd.DataFrame = read_asset(asset)
-
-    else:
-        data: pd.DataFrame = asset
-    print("filas encontradas del DataFrame", len(data))
-    part: int = len(data)//partitions
-    pointer: int = part
-    for i in range(1, partitions + 1):
-        sub_data: pd.DataFrame = data.head(pointer)
-
-        bets_sub: tuple[str, int, int] = best_main(sub_data, "fm", "kpi")
-        print("resultados preliminares de entrenamiento", bets_sub)
-
-        ohlc_data: pd.DataFrame = ohlc_form(data, str(bets_sub[2]) + "min")
-        ma_perform: pd.Series = main(bets_sub[0], bets_sub[1], ohlc_data)
-
-        kpis: tuple[float, float, float, int] = backtest_ma(ma_perform, ohlc_data["close"], "kpi")
-
-        print("Resultado de entrenamiento con las primeras", pointer, "filas, rango de fechas", 
-              f"{sub_data.index[0].strftime("%d/%m/%Y")}-{sub_data.index[-1].strftime("%d/%m/%Y")}")
-        print("hit ratio:", kpis[0])
-        print("risk reward:", kpis[1])
-        print("profit factor:", kpis[2])
-        print("trades:", kpis[3], "\n\n")
-
-        pointer += part
-
-
-
-def optimize_ma_rsi(data: pd.DataFrame, engie: str = "fm") -> tuple[str, int, int, int]:
+def opti_main(data: Union[pd.DataFrame, str], engie: str = "fm",max_rsi: int = None) -> list:
     if isinstance(data, str):
-        data: pd.DataFrame = read_asset(data)
-    else:
-        data: pd.DataFrame = data
-
-    def objective(params: tuple[str, int, int, int]) -> float:
-        method, lookback, vela, rsi_n = params
-
-        return -func_to_opt_rsi(data, method, lookback, vela, rsi_n)
+        data = read_asset(data)
     
-    space = make_search_space(methods, lookbacks, candles, n_rsis)
+    best_results: list = []
 
+    for method in keys.methods:
+        space: list = make_search_space(method, max_rsi)
+
+        def objective(param: list) -> float:
+            ohlc: pd.DataFrame = ohlc_form(data, str(param[0]) + "min")
+
+            if method not in complex_methods:
+                real_param = param[1]
+            else:
+                real_param: list = param[1:] if max_rsi is None else param[1:-1]
+
+            if method == "MACD":
+                if real_param[0] <= real_param[1]:
+                    temp: int = real_param[0]
+                    real_param[0] = real_param[1]
+                    real_param[1] = temp
+
+            signals_prices: pd.DataFrame = main(method, ohlc, real_param)
+
+            if max_rsi is not None:
+               hr, rr, pr, tr = backtest(signals_prices, param[-1], ohlc["close"])
+            else:
+                hr, rr, pr, tr = backtest(signals_prices)
+
+            if tr == 0:
+                return 1.
+
+            loss = 1 - hr
+            expecty = (hr * rr) - loss
+            score = expecty * sqrt(tr)
+
+            if pr > 0:
+                score += log(pr)
+
+            return -score
+
+        result: list = optimizer(objective, space, engie)
+        result.insert(0, method)
+        best_results.append(result)
+    
+    if max_rsi is None:
+        read_results(best_results, data)
+    else:
+        read_results(best_results, data, max_rsi)
+    return best_results
+
+
+def optimizer(objective: Callable, space: list, engie: str = "fm") -> tuple:
     if engie == "gp":
         result = gp_minimize(
                     func=objective,
                     dimensions=space,
-                    n_calls=calls,
+                    n_calls=keys.calls,
                     n_initial_points=10,
                     random_state=42,
                 )
-    if engie == "fm":
+
+    elif engie == "fm":
         result = forest_minimize(
-                func=objective,
-                dimensions=space,
-                n_calls=calls,
-                n_initial_points=10,
-                random_state=0,
-                verbose=False
-        )
+                    func=objective,
+                    dimensions=space,
+                    n_calls=keys.calls,
+                    n_initial_points=10,
+                    random_state=0,
+                    verbose=False
+                 )
 
-    best_method, best_lookback, best_candle, best_n = result.x
-    return (best_method,
-            best_lookback,
-            best_candle,
-            best_n
-    )
+    else:
+        raise ValueError(f"No se reconoce {engie} como Motor")
 
-def func_to_opt(data: pd.DataFrame, method: str, lookback: int, candle: int, perform: bool = False, obj: str = "kpi") -> float:
-    ohlc: pd.DataFrame = ohlc_form(data, str(candle) + "min")
-    ma_perform: pd.Series = main(method, lookback, ohlc)
-    if obj == "kpi":
-        hr, rr, pr, tr = backtest_ma(ma_perform, ohlc["close"])
-    
-        if perform:
-            print("hit ratio, risk reward, profit ratio, trades")
-            return (hr, rr, pr, tr)
-        return weights[0]*hr + rr*weights[1] + pr*weights[2] + tr*weights[3]
-    elif obj == "mon":
-        return backtest_ma(ma_perform, ohlc["close"], obj)
-    
-    return 0
+    return result.x
 
-def func_to_opt_rsi(data: pd.DataFrame, method: str, lookback: int, cand: int, rsi_n: int) -> float:
-    ohlc: pd.DataFrame = ohlc_form(data, str(cand) + "min")
-    ma_perform: pd.Series = main(method, lookback, ohlc)
+# Ahora se piensa que el espacio depende el método a usarse,
+# en el sentido si es método complejo o no
 
-    hr, rr, pr, tr = test_ma_rsi(ohlc["close"], ma_perform, rsi_n)
+# Se asume que el primer elemento de extras es el elemento que 
+# equivale a lookbac de cada método 
 
-    if tr < 5:
-        return 0
+def make_search_space(method: str, range_rsi: int = None) -> list:
+    search_space: list = []
 
-    score = .8*hr + .1*rr + .1*pr
-    return score
+    if method not in keys.methods:
+        raise ValueError("Método no aceptado")
 
-
-# La cota inferior de range_back es 2 y la de range_candle es 1. La cota máxima depende 
-# de los datos usados
-def make_search_space(methods: set[str], range_back: int, range_candle: int, range_rsi: int = None) -> list[Categorical, Integer, Integer]:
-    if methods == None or len(methods) == 0:
-        raise ValueError("Lista de métodos no aceptada")
-
-    if range_back <= 1:
+    if keys.lookbacks <= 1:
         raise ValueError("Invalido espacio de búsqueda para lookback")
 
-    if range_candle <= 0:
+    if keys.candles <= 0:
         raise ValueError("Inválido espacio de búsqueda para vela")
-    
+
     if range_rsi != None and range_rsi <= 1:
         raise ValueError("Inválido espacio de búsqueda para parámetro de RSI")
-
-    search_space: list[Categorical, Integer, Integer] = []
-    search_space.append(Categorical(list(methods), name="ma_methods"))
-    search_space.append(Integer(2, range_back, name="lookback"))
-
-    if range_candle != 1:
-        search_space.append(Integer(1, range_candle, name="candle"))
+    
+    if keys.candles != 1:
+        search_space.append(Integer(1, keys.candles, name="candle"))
     else:
         search_space.append(Categorical([1], name="candle"))
 
+    search_space.append(Integer(2, keys.lookbacks, name="lookback"))
+
+    if method in complex_methods:
+        if method == "MACD":
+            search_space.append(Integer(2, keys.lookbacks_min, name="lookback_min"))
+            search_space.append(Integer(2, keys.signal_back, name="signal_back"))
+
+        elif method == "BBANDS":
+            search_space.append(Real(1.0, keys.dev_up, name="dev_up"))
+            search_space.append(Real(1.0, keys.dev_dn, name="dev_dn"))
+            search_space.append(Categorical(list(range(keys.matype + 1)), name="matype"))
+
+        elif method == "DONCHIAN":
+            search_space.append(Integer(2, keys.lookbacks_min, name="lookback_lower"))
+
+        elif method == "ZSCORE_EMA":
+            search_space.append(Real(0.0, keys.threshold, name="threshold"))
+            search_space.append(Categorical(list(range(keys.matype + 1)), name="matype"))
+
+        else:
+            raise ValueError(f"{method} no es un método implementado aún")
+
     if range_rsi != None:
-        if range_rsi ==2:
+        if range_rsi == 2:
             search_space.append(Categorical([2], name="rsi_v"))
+
         else:
             search_space.append(Integer(2, range_rsi, name="rsi_v"))
 
     return search_space
 
-def log_prices(asset: Union[str, pd.DataFrame], engie: str = "fm", obj: str = "kpi") -> pd.Series:
-    if isinstance(asset, str):
-        data: pd.DataFrame =  read_asset(asset)
-    else:
-        data: pd.DataFrame = asset
-    # obtenemos una buena moving averague
-    best_method, best_lookback, best_candle = best_main(data, engie, obj)
-    
-    # Ahora vamos a conseguir el Series que le corresponde a esos 3 
-    print(best_candle)
-    data = ohlc_form(data, str(best_candle) + "min")
-    best_ma: pd.Series = main(best_method, best_lookback, data)
-    return log(best_ma).diff()
+# Cada resultado tiene la forma [metodo, candle, añadidos]
+def read_results(results: list[dict], real_data: pd.DataFrame, rsi: bool = False) -> None:
 
-def realized_variance(asset: Union[str, pd.DataFrame], periods: int = 2):
-    # para peridos intradía, es mejor usar periods pequeños,
-    # por defecto se usan 2
-    
-    prices_log: pd.Series = log_prices(asset)
-    return (prices_log ** 2).rolling(periods).sum()
+    for result in results:
+        ohlc = ohlc_form(real_data, str(result[1]) + "min")
+
+        vector_perform: pd.DataFrame = main(result[0], ohlc, result[2:])
+
+        if not rsi:
+            hr, rr, pr, tr = backtest(vector_perform)
+
+        else:
+            hr, rr, pr, tr = backtest(vector_perform, result[-1], real_data)
+
+        print("Redimiento de una ma con:")
+        print(f"método: {result[0]}, vela: {result[1]}, añadidos: {result[2]}")
+        print(f"hit ratio: {hr}\nrisk reward: {rr}\nprofit factor: {pr}\ntrades: {tr}\n\n")
