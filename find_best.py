@@ -164,5 +164,5 @@ def read_results(results: list[dict], real_data: pd.DataFrame, rsi: bool = False
             hr, rr, pr, tr = backtest(vector_perform, result[-1], real_data)
 
         print("Redimiento de una ma con:")
-        print(f"método: {result[0]}, vela: {result[1]}, añadidos: {result[2]}")
+        print(f"método: {result[0]}, vela: {result[1]}, añadidos: {result[2:]}")
         print(f"hit ratio: {hr}\nrisk reward: {rr}\nprofit factor: {pr}\ntrades: {tr}\n\n")

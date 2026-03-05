@@ -44,6 +44,8 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series) -> pd.Series:
     # En el vector de compra o venta aparece un 1 como compra, un -1 como venta
     # y 0 indica no hacer nada
     vector_buy: pd.Series = (signal_buy - signal_sell)
+    vector_buy = vector_buy.shift(1).fillna(0)
+
     return vector_buy[vector_buy != 0]
 
 # esta es una medida de cuántas veces la ma acierta 
