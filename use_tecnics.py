@@ -9,7 +9,9 @@ avalible_methods: set = simple_methods | complex_methods
 
 
 # actualmente este método va a retornar el vector de compras y ventas
-def main(method: str, data: pd.DataFrame, adicional_data: Union[list, int]) -> pd.DataFrame:
+# De ahora en adelanta se asume que data ya es el vector de información
+# final
+def main(method: str, data: pd.Series, adicional_data: Union[list, int]) -> pd.DataFrame:
     if method not in avalible_methods:
         raise ValueError("Not avalible method")
 
@@ -20,14 +22,14 @@ def main(method: str, data: pd.DataFrame, adicional_data: Union[list, int]) -> p
         if isinstance(adicional_data, list):
             adicional_data = adicional_data[0]
 
-        ma: pd.Series = SIMPLE_METHODS[method](data["close"], adicional_data)
-        ma = get_vector_buys(ma, data["close"])
+        ma: pd.Series = SIMPLE_METHODS[method](data, adicional_data)
+        ma = get_vector_buys(ma, data)
 
     else:
         if method == "MACD":
             # en adicional_data se espera así
             # slowperiod, fastperiod, signal_back 
-            ma: pd.Series = macd(data["close"], 
+            ma: pd.Series = macd(data, 
                                 adicional_data[0], 
                                 adicional_data[1],
                                 adicional_data[2])
@@ -35,19 +37,19 @@ def main(method: str, data: pd.DataFrame, adicional_data: Union[list, int]) -> p
         elif method == "BBANDS":
             # en adicional_data se espera así
             # lookback, dev_up, dev_dn, matype
-            ma: pd.Series = bbands(data["close"],
+            ma: pd.Series = bbands(data,
                                    adicional_data[0],
                                    adicional_data[1],
                                    adicional_data[2],
                                    adicional_data[3])
 
         elif method == "DONCHIAN":
-            ma: pd.Series = donchian(data["close"], 
+            ma: pd.Series = donchian(data, 
                                      adicional_data[0], 
                                      adicional_data[1])
 
         elif method == "ZSCORE_EMA":
-            ma: pd.Series = z_score_ema(data["close"],
+            ma: pd.Series = z_score_ema(data,
                                         adicional_data[0],
                                         adicional_data[1],
                                         adicional_data[2])
@@ -55,7 +57,7 @@ def main(method: str, data: pd.DataFrame, adicional_data: Union[list, int]) -> p
         else:
             raise ValueError(f"{method} no implementado")
 
-    ma = pd.concat([ma, data["close"]], axis = 1, join = "inner")
+    ma = pd.concat([ma, data], axis = 1, join = "inner")
     ma.columns = ["Signals", "Prices"]
     return ma
 

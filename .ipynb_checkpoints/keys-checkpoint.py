@@ -1,8 +1,7 @@
 from use_tecnics import avalible_methods
-import read_data
-from typing import Union
+
 # llaves para las llamadas del optimizador
-calls: int = 50
+calls: int = 100
 initial_points: int = 20
 
 
@@ -29,15 +28,3 @@ matype: int = 8
 
 # llaves para ZSCORE-EMA
 threshold: float = 3.0
-
-# pre-calculo de ohlc
-pre_ohlc: dict = {}
-
-def fill_ohlc_dict(data) -> None:
-    pre_ohlc.clear()
-
-    if isinstance(data, str):
-        data = read_data.read_asset(data)
-
-    for i in range(1, candles+1):
-        pre_ohlc[i] = read_data.ohlc_form(data, str(i)+"min")["close"]

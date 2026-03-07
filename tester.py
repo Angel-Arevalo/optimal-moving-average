@@ -48,17 +48,12 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series) -> pd.Series:
 
     return vector_buy[vector_buy != 0]
 
-# esta es una medida de cuántas veces la ma acierta 
 def hit_ratio(trade_resume: pd.Series) -> float:
     if len(trade_resume) == 0:
-        return 0
-    counter: int = 0
-
-    for trade in trade_resume:
-        if trade > 0:
-            counter += 1
-
-    return counter/len(trade_resume)
+        return 0.0
+    
+    ganadoras = (trade_resume > 0).sum()
+    return ganadoras / len(trade_resume)
 
 def rr_ratio(trade_resume: pd.Series) -> float:
     winners = trade_resume[trade_resume > 0]

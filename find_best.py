@@ -14,22 +14,30 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-def opti_main(data: Union[pd.DataFrame, str], engie: str = "fm",max_rsi: int = None) -> list:
+def opti_main(data: Union[pd.DataFrame, str], engie: str = "fm") -> list:
     if isinstance(data, str):
         data = read_asset(data)
-    
-    best_results: list = []
+
+    keys.fill_ohlc_dict(data)
+
+    best_result: list = None
+    b_met: str = ""
+    b_ht: float = 0
+    b_rr: float = 0
+    b_pr: float = 0
+    b_trades: int = 0
+    b_score: float = 0
 
     for method in keys.methods:
-        space: list = make_search_space(method, max_rsi)
+        space: list = make_search_space(method)
 
-        def objective(param: list) -> float:
-            ohlc: pd.DataFrame = ohlc_form(data, str(param[0]) + "min")
+        def objective(param: list, kpis: bool = True) -> float:
+            ohlc: pd.DataFrame = keys.pre_ohlc[param[0]]
 
             if method not in complex_methods:
                 real_param = param[1]
             else:
-                real_param: list = param[1:] if max_rsi is None else param[1:-1]
+                real_param: list = param[1:]
 
             if method == "MACD":
                 if real_param[0] <= real_param[1]:
@@ -39,33 +47,51 @@ def opti_main(data: Union[pd.DataFrame, str], engie: str = "fm",max_rsi: int = N
 
             signals_prices: pd.DataFrame = main(method, ohlc, real_param)
 
-            if max_rsi is not None:
-               hr, rr, pr, tr = backtest(signals_prices, param[-1], ohlc["close"])
-            else:
-                hr, rr, pr, tr = backtest(signals_prices)
+            hr, rr, pr, tr = backtest(signals_prices)
 
-            if tr == 0:
-                return 1.
+            if kpis:
+                return -f(hr, rr, pr, tr)
 
-            loss = 1 - hr
-            expecty = (hr * rr) - loss
-            score = expecty * sqrt(tr)
-
-            if pr > 0:
-                score += log(pr)
-
-            return -score
+            return (f(hr, rr, pr, tr), hr, rr, pr, tr)
 
         result: list = optimizer(objective, space, engie)
-        result.insert(0, method)
-        best_results.append(result)
-    
-    if max_rsi is None:
-        read_results(best_results, data)
-    else:
-        read_results(best_results, data, max_rsi)
-    return best_results
 
+        if best_result is None:
+            best_result = result
+            b_score, b_ht, b_rr, b_pr, b_trades = objective(result, False)
+            b_met = method
+
+        else:
+            score, ht, rr, pr, tr = objective(result, False)
+
+            if b_score < score:
+                b_score = score
+                b_ht = ht
+                b_rr = rr 
+                b_pr = pr
+                b_trades= tr
+                best_result = result
+                b_met = method
+
+    print(f'Resultado obtenido entrenando desde {data.index[0].strftime("%Y-%m-%d")} hasta {data.index[-1].strftime("%Y-%m-%d")}')
+    print(f"Método: {b_met}, Datos optimizados {best_result}")
+    print(f"\nhit ratio: {b_ht}\nrisk reward: {b_rr}\nprofit factor: {b_pr}\ntrades: {b_trades}")
+    best_result.insert(0, b_met)
+
+    return best_result
+
+def f(hr: float, rr: float, pr: float, tr: int) -> float:
+    if tr == 0:
+        return 1.
+
+    loss = 1 - hr
+    expecty = (hr * rr) - loss
+    score = expecty * sqrt(tr)
+
+    if pr > 0:
+        score += log(pr)
+
+    return score
 
 def optimizer(objective: Callable, space: list, engie: str = "fm") -> tuple:
     if engie == "gp":
@@ -98,7 +124,7 @@ def optimizer(objective: Callable, space: list, engie: str = "fm") -> tuple:
 # Se asume que el primer elemento de extras es el elemento que 
 # equivale a lookbac de cada método 
 
-def make_search_space(method: str, range_rsi: int = None) -> list:
+def make_search_space(method: str) -> list:
     search_space: list = []
 
     if method not in keys.methods:
@@ -110,9 +136,6 @@ def make_search_space(method: str, range_rsi: int = None) -> list:
     if keys.candles <= 0:
         raise ValueError("Inválido espacio de búsqueda para vela")
 
-    if range_rsi != None and range_rsi <= 1:
-        raise ValueError("Inválido espacio de búsqueda para parámetro de RSI")
-    
     if keys.candles != 1:
         search_space.append(Integer(1, keys.candles, name="candle"))
     else:
@@ -140,29 +163,17 @@ def make_search_space(method: str, range_rsi: int = None) -> list:
         else:
             raise ValueError(f"{method} no es un método implementado aún")
 
-    if range_rsi != None:
-        if range_rsi == 2:
-            search_space.append(Categorical([2], name="rsi_v"))
-
-        else:
-            search_space.append(Integer(2, range_rsi, name="rsi_v"))
-
     return search_space
 
 # Cada resultado tiene la forma [metodo, candle, añadidos]
-def read_results(results: list[dict], real_data: pd.DataFrame, rsi: bool = False) -> None:
+# Cada resultado tiene la forma [metodo, candle, añadidos]
+def read_results(result: list, real_data: pd.DataFrame) -> None:
+    ohlc = ohlc_form(real_data, str(result[1]) + "min")["close"]
 
-    for result in results:
-        ohlc = ohlc_form(real_data, str(result[1]) + "min")
+    vector_perform: pd.DataFrame = main(result[0], ohlc, result[2:])
 
-        vector_perform: pd.DataFrame = main(result[0], ohlc, result[2:])
+    hr, rr, pr, tr = backtest(vector_perform)
 
-        if not rsi:
-            hr, rr, pr, tr = backtest(vector_perform)
-
-        else:
-            hr, rr, pr, tr = backtest(vector_perform, result[-1], real_data)
-
-        print("Redimiento de una ma con:")
-        print(f"método: {result[0]}, vela: {result[1]}, añadidos: {result[2:]}")
-        print(f"hit ratio: {hr}\nrisk reward: {rr}\nprofit factor: {pr}\ntrades: {tr}\n\n")
+    print("Rendimiento de una ma con:")
+    print(f"método: {result[0]}, vela: {result[1]}, añadidos: {result[2:]}")
+    print(f"hit ratio: {hr}\nrisk reward: {rr}\nprofit factor: {pr}\ntrades: {tr}\n\n")

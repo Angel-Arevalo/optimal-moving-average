@@ -13,5 +13,5 @@ hr, rr, pf, tr = tester.backtest(signals)
 
 print(hr, rr, pf, tr)
 """
-keys.methods = {"SMA", "EMA", "MACD"}
+keys.candles = 5
 print(find_best.opti_main("EURUSD.parquet"))
