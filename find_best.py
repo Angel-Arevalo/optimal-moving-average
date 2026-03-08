@@ -17,7 +17,7 @@ warnings.filterwarnings("ignore")
 def opti_main(data: Union[pd.DataFrame, str], engie: str = "fm") -> list:
     if isinstance(data, str):
         data = read_asset(data)
-
+    
     keys.fill_ohlc_dict(data)
 
     best_result: list = None
@@ -47,12 +47,11 @@ def opti_main(data: Union[pd.DataFrame, str], engie: str = "fm") -> list:
 
             signals_prices: pd.DataFrame = main(method, ohlc, real_param)
 
-            hr, rr, pr, tr = backtest(signals_prices)
-
+            hr, rr, pr, tr, sqn = backtest(signals_prices, True)
             if kpis:
-                return -f(hr, rr, pr, tr)
+                return -f(hr, rr, pr, tr, sqn)
 
-            return (f(hr, rr, pr, tr), hr, rr, pr, tr)
+            return (sqn, hr, rr, pr, tr)
 
         result: list = optimizer(objective, space, engie)
 
@@ -76,22 +75,16 @@ def opti_main(data: Union[pd.DataFrame, str], engie: str = "fm") -> list:
     print(f'Resultado obtenido entrenando desde {data.index[0].strftime("%Y-%m-%d")} hasta {data.index[-1].strftime("%Y-%m-%d")}')
     print(f"Método: {b_met}, Datos optimizados {best_result}")
     print(f"\nhit ratio: {b_ht}\nrisk reward: {b_rr}\nprofit factor: {b_pr}\ntrades: {b_trades}")
+    print(f"Resultado de sobre ajuste {score}")
     best_result.insert(0, b_met)
 
     return best_result
 
-def f(hr: float, rr: float, pr: float, tr: int) -> float:
-    if tr == 0:
-        return 1.
+def f(hr: float, rr: float, pr: float, tr: int, sqn: float) -> float:
+    if pr < 1.0 or sqn < 0:
+        return -1000.0
 
-    loss = 1 - hr
-    expecty = (hr * rr) - loss
-    score = expecty * sqrt(tr)
-
-    if pr > 0:
-        score += log(pr)
-
-    return score
+    return sqn
 
 def optimizer(objective: Callable, space: list, engie: str = "fm") -> tuple:
     if engie == "gp":
@@ -165,7 +158,6 @@ def make_search_space(method: str) -> list:
 
     return search_space
 
-# Cada resultado tiene la forma [metodo, candle, añadidos]
 # Cada resultado tiene la forma [metodo, candle, añadidos]
 def read_results(result: list, real_data: pd.DataFrame) -> None:
     ohlc = ohlc_form(real_data, str(result[1]) + "min")["close"]

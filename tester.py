@@ -1,37 +1,32 @@
 import pandas as pd
-from numpy import float64
+from numpy import float64, isnan, sqrt
 
 # Se retornan los kpi's en una tupla con este orden: hit ratio, risk reward ratio, profit ratio
 
-def backtest(signals_and_prices: pd.DataFrame, rsi_factor: int = None, data: pd.Series = None):
-    if rsi_factor is not None:
-        if data is None:
-            raise ValueError("Imposible sacar el rsi sin imforación")
-
-        rsi: pd.Series = get_rsi(data, rsi_factor)
-
-        buy_signal: pd.Series = ((signals_and_prices["Signals"] == 1) & (rsi > 30)).astype(int)
-        sell_signal: pd.Series = ((signals_and_prices["Signals"] == -1) & (rsi < 70)).astype(int)
-
-        signal_cross = buy_signal - sell_signal
-        signal_cross = signal_cross[signal_cross != 0]
-
-        signal_cross = signal_cross[signal_cross != signal_cross.shift(1)]
-
-        signals_and_prices = pd.DataFrame({"Signals": signal_cross,
-                                           "Prices": signals_and_prices["Prices"].loc[signal_cross.index]
-                                           })
-
+def backtest(signals_and_prices: pd.DataFrame, calq_sqn: bool = False):
     signals_and_prices["Trade"] = (signals_and_prices["Prices"].shift(-1) - signals_and_prices["Prices"])*signals_and_prices["Signals"]
     signals_and_prices["Trade"] = signals_and_prices["Trade"].fillna(0)
 
     trade_resume: pd.Series = signals_and_prices.loc[signals_and_prices["Signals"] != 0, "Trade"]
 
-    return (hit_ratio(trade_resume),
-            rr_ratio(trade_resume),
-            profit_ratio(trade_resume),
-            len(trade_resume)
-            )
+    hr = hit_ratio(trade_resume)
+    rr = rr_ratio(trade_resume)
+    pr = profit_ratio(trade_resume)
+    tr = len(trade_resume)
+   
+    if calq_sqn:
+        mu = trade_resume.mean()
+        sigma = trade_resume.std()
+
+        if isnan(sigma) or sigma == 0:
+            sqn = -10
+        else:
+            sqn = sqrt(min(tr, 100)) * (mu / sigma)
+
+        return hr, rr, pr, tr, sqn
+
+    return hr, rr, pr, tr
+
 
 def get_vector_buys(man_back: pd.Series, real_data: pd.Series) -> pd.Series:
     pre_man: pd.Series = man_back.shift(1)
