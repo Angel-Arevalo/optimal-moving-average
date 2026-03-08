@@ -2,7 +2,7 @@ from use_tecnics import avalible_methods
 import read_data
 from typing import Union
 # llaves para las llamadas del optimizador
-calls: int = 50
+calls: int = 60
 initial_points: int = 20
 
 

@@ -4,10 +4,11 @@ from numpy import float64, isnan, sqrt
 # Se retornan los kpi's en una tupla con este orden: hit ratio, risk reward ratio, profit ratio
 
 def backtest(signals_and_prices: pd.DataFrame, calq_sqn: bool = False):
+    cost: float = 0.00015
     signals_and_prices["Trade"] = (signals_and_prices["Prices"].shift(-1) - signals_and_prices["Prices"])*signals_and_prices["Signals"]
     signals_and_prices["Trade"] = signals_and_prices["Trade"].fillna(0)
 
-    trade_resume: pd.Series = signals_and_prices.loc[signals_and_prices["Signals"] != 0, "Trade"]
+    trade_resume: pd.Series = signals_and_prices.loc[signals_and_prices["Signals"] != 0, "Trade"] - cost
 
     hr = hit_ratio(trade_resume)
     rr = rr_ratio(trade_resume)
