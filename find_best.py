@@ -14,10 +14,11 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-def opti_main(data: Union[pd.DataFrame, str], engie: str = "fm") -> list:
+def opti_main(data: Union[pd.DataFrame, str], verbose: bool = True, engie: str = "fm") -> list:
     if isinstance(data, str):
         data = read_asset(data)
-    
+
+    keys.pre_ohlc = {}
     keys.fill_ohlc_dict(data)
 
     best_result: list = None
@@ -72,19 +73,30 @@ def opti_main(data: Union[pd.DataFrame, str], engie: str = "fm") -> list:
                 best_result = result
                 b_met = method
 
-    print(f'Resultado obtenido entrenando desde {data.index[0].strftime("%Y-%m-%d")} hasta {data.index[-1].strftime("%Y-%m-%d")}')
-    print(f"Método: {b_met}, Datos optimizados {best_result}")
-    print(f"\nhit ratio: {b_ht}\nrisk reward: {b_rr}\nprofit factor: {b_pr}\ntrades: {b_trades}")
-    print(f"Resultado de sobre ajuste {score}")
+    if verbose:
+        print(f'Resultado obtenido entrenando desde {data.index[0].strftime("%Y-%m-%d")} hasta {data.index[-1].strftime("%Y-%m-%d")}')
+        print(f"Método: {b_met}, Datos optimizados {best_result}")
+        print(f"\nhit ratio: {b_ht}\nrisk reward: {b_rr}\nprofit factor: {b_pr}\ntrades: {b_trades}")
+        print(f"Resultado de sobre ajuste {score}")
+
     best_result.insert(0, b_met)
 
     return best_result
 
 def f(hr: float, rr: float, pr: float, tr: int, sqn: float) -> float:
-    if pr < 1.0 or sqn < 0:
-        return -1000.0
+    if rr < 1.0 or pr < 1.1:
+        return 10
 
-    return sqn
+    loss = 1 - hr
+
+    expecty = hr*rr - loss
+
+    expecty = expecty*sqrt(tr)
+
+    if pr > 0:
+        expecty += log(pr)
+
+    return expecty
 
 def optimizer(objective: Callable, space: list, engie: str = "fm") -> tuple:
     if engie == "gp":

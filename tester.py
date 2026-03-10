@@ -17,6 +17,7 @@ def backtest(signals_and_prices: pd.DataFrame, calq_sqn: bool = False):
    
     if calq_sqn:
         mu = trade_resume.mean()
+
         sigma = trade_resume.std()
 
         if isnan(sigma) or sigma == 0:
