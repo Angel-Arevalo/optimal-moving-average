@@ -4,11 +4,8 @@ from numpy import float64, isnan, sqrt
 # Se retornan los kpi's en una tupla con este orden: hit ratio, risk reward ratio, profit ratio
 
 def backtest(signals_and_prices: pd.DataFrame, calq_sqn: bool = False):
-    cost: float = 0.00015
-    signals_and_prices["Trade"] = (signals_and_prices["Prices"].shift(-1) - signals_and_prices["Prices"])*signals_and_prices["Signals"]
-    signals_and_prices["Trade"] = signals_and_prices["Trade"].fillna(0)
-
-    trade_resume: pd.Series = signals_and_prices.loc[signals_and_prices["Signals"] != 0, "Trade"] - cost
+    trade_resume: pd.Series = signals_and_prices["Prices"].diff().fillna(0)
+    trade_resume = trade_resume[signals_and_prices["Signals"] == -1]
 
     hr = hit_ratio(trade_resume)
     rr = rr_ratio(trade_resume)
@@ -35,13 +32,13 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series) -> pd.Series:
     pre_data: pd.Series = real_data.shift(1)
     
     # Señales de cruce de moving average, 
-    signal_buy: pd.Series = ((pre_man < pre_data) & (man_back > real_data)).astype(int)
-    signal_sell: pd.Series = ((pre_man >= pre_data) & (man_back < real_data)).astype(int)
+    signal_buy: pd.Series = ((pre_man <= pre_data) & (man_back > real_data)).astype(int)
+    signal_sell: pd.Series = ((pre_man > pre_data) & (man_back <= real_data)).astype(int)
 
     # En el vector de compra o venta aparece un 1 como compra, un -1 como venta
     # y 0 indica no hacer nada
     vector_buy: pd.Series = (signal_buy - signal_sell)
-    vector_buy = vector_buy.shift(1).fillna(0)
+    vector_buy = vector_buy.fillna(0)
 
     return vector_buy[vector_buy != 0]
 

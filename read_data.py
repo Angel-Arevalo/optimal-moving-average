@@ -18,7 +18,7 @@ def read_asset(asset_name: str) -> pd.DataFrame:
 # Intervalos válidos: 1min, 5min, 15min, 1H, ...
 def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: str) -> pd.DataFrame:
     if isinstance(asset, str):
-        return read_asset(asset_name)["Precio Spot"].resample(time_rule).ohlc().ffill().bfill()
+        return read_asset(asset)["Precio Spot"].resample(time_rule).ohlc().ffill().bfill()
 
     return asset["Precio Spot"].resample(time_rule).ohlc().ffill()
 
