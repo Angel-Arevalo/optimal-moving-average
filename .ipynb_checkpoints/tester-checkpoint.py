@@ -1,25 +1,30 @@
 import pandas as pd
-from numpy import float64
+from numpy import float64, isnan, sqrt
 
 # Se retornan los kpi's en una tupla con este orden: hit ratio, risk reward ratio, profit ratio
 
-def backtest_ma(man_back: pd.Series, real_data: pd.Series, obj: str = "kpi") -> tuple[float, float, float, float]:
-    vector_buy: pd.Series = get_vector_buys(man_back, real_data)
+def backtest(signals_and_prices: pd.DataFrame, calq_sqn: bool = False):
+    trade_resume: pd.Series = signals_and_prices["Prices"].diff().fillna(0)
+    trade_resume = trade_resume[signals_and_prices["Signals"] == -1]
 
-    prices_and_signals: pd.DataFrame = pd.concat([vector_buy, real_data], axis=1, join="inner")
-    prices_and_signals.columns = ["Signals", "Prices"]
-    
-    prices_and_signals["trade"] = (prices_and_signals["Prices"].shift(-1) - prices_and_signals["Prices"])*prices_and_signals["Signals"]
-    prices_and_signals["trade"] = prices_and_signals["trade"].fillna(0)
-    
-    if obj == "kpi":
-        return (hit_ratio(prices_and_signals["trade"]), 
-                rr_ratio(prices_and_signals["trade"]),
-                profit_ratio(prices_and_signals["trade"]),
-                len(prices_and_signals["Signals"]))
+    hr = hit_ratio(trade_resume)
+    rr = rr_ratio(trade_resume)
+    pr = profit_ratio(trade_resume)
+    tr = len(trade_resume)
+   
+    if calq_sqn:
+        mu = trade_resume.mean()
 
-    if obj == "mon":
-        return get_total_money(prices_and_signals["trade"])
+        sigma = trade_resume.std()
+
+        if isnan(sigma) or sigma == 0:
+            sqn = -10
+        else:
+            sqn = sqrt(min(tr, 100)) * (mu / sigma)
+
+        return hr, rr, pr, tr, sqn
+
+    return hr, rr, pr, tr
 
 
 def get_vector_buys(man_back: pd.Series, real_data: pd.Series) -> pd.Series:
@@ -27,50 +32,57 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series) -> pd.Series:
     pre_data: pd.Series = real_data.shift(1)
     
     # Señales de cruce de moving average, 
-    signal_buy: pd.Series = ((pre_man < pre_data) & (man_back > real_data)).astype(int)
-    signal_sell: pd.Series = ((pre_man >= pre_data) & (man_back < real_data)).astype(int)
+    signal_buy: pd.Series = ((pre_man <= pre_data) & (man_back > real_data)).astype(int)
+    signal_sell: pd.Series = ((pre_man > pre_data) & (man_back <= real_data)).astype(int)
 
     # En el vector de compra o venta aparece un 1 como compra, un -1 como venta
     # y 0 indica no hacer nada
     vector_buy: pd.Series = (signal_buy - signal_sell)
+    vector_buy = vector_buy.fillna(0)
+
+    #vector_buy = vector_buy.shift(1)
     return vector_buy[vector_buy != 0]
 
-# esta es una medida de cuántas veces la ma acierta 
 def hit_ratio(trade_resume: pd.Series) -> float:
     if len(trade_resume) == 0:
-        return 0
-    counter: int = 0
-
-    for trade in trade_resume:
-        if trade > 0:
-            counter += 1
-
-    return counter/len(trade_resume)
-
-# es una medida que me dice cuánto gano en promedio comparado con las perdidas
-def rr_ratio(trade_resume: pd.Series) -> float:
-    prom_winner: float = trade_resume[trade_resume > 0].mean()
-    prom_losser: float = -trade_resume[trade_resume < 0].mean()
-    return prom_winner/prom_losser
-
-# Similar al risk reward pero no en promedio
-def profit_ratio(trade_resume: pd.Series) -> float:
-    sum_winner: float = trade_resume[trade_resume > 0].sum()
-    sum_losser: float = -trade_resume[trade_resume < 0].sum()
-    return sum_winner/sum_losser
-
-def rsi(series: pd.Series, n: int = 14) -> pd.Series:
-    delta = series.diff()
+        return 0.0
     
+    ganadoras = (trade_resume > 0).sum()
+    return ganadoras / len(trade_resume)
+
+def rr_ratio(trade_resume: pd.Series) -> float:
+    winners = trade_resume[trade_resume > 0]
+    losers = trade_resume[trade_resume < 0]
+
+    if winners.empty or losers.empty:
+        return 0.0
+
+    prom_winner = winners.mean()
+    prom_losser = -losers.mean()
+    return prom_winner / prom_losser
+
+def profit_ratio(trade_resume: pd.Series) -> float:
+    winners = trade_resume[trade_resume > 0]
+    losers = trade_resume[trade_resume < 0]
+
+    if winners.empty or losers.empty or losers.sum() == 0:
+        return 0.0
+
+    return winners.sum() / (-losers.sum())
+
+def get_rsi(data: pd.Series, n: int) -> pd.Series:
+    delta = data.diff()
+
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
-    
+
     avg_gain = gain.ewm(alpha=1/n, adjust=False).mean()
     avg_loss = loss.ewm(alpha=1/n, adjust=False).mean()
-    
-    rs = avg_gain / avg_loss
-    
-    return 100 - (100 / (1 + rs))
+
+    rs = avg_gain.div(avg_loss.replace(0, 1e-10))
+    rsi = 100 - (100 / (1 + rs))
+
+    return rsi
 
 def atr(df: pd.DataFrame, n: int = 14) -> pd.Series:
     

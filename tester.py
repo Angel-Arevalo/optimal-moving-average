@@ -40,7 +40,7 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series) -> pd.Series:
     vector_buy: pd.Series = (signal_buy - signal_sell)
     vector_buy = vector_buy.fillna(0)
 
-    vector_buy = vector_buy.shift(1)
+    #vector_buy = vector_buy.shift(1)
     return vector_buy[vector_buy != 0]
 
 def hit_ratio(trade_resume: pd.Series) -> float:
