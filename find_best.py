@@ -114,7 +114,7 @@ def optimizer(objective: Callable, space: list, engie: str = "fm") -> tuple:
                     dimensions=space,
                     n_calls=keys.calls,
                     n_initial_points=10,
-                    random_state=0,
+                    random_state=None,
                     verbose=False
                  )
 
