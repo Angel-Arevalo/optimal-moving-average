@@ -1,144 +1,146 @@
 import pandas as pd
 import numpy as np
+from use_tecnics import main
+from read_data import ohlc_form
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_absolute_error
-from typing import Tuple
+from sklearn.metrics import classification_report
 
-import tensorflow as tf
-from tensorflow.keras import layers, models, callbacks, optimizers
+def filter_signals_with_ml(signals_and_prices: pd.DataFrame, real_data, modelo, umbral: float = 0.5) -> pd.DataFrame:
+    filtered_df = signals_and_prices.copy()
 
-import read_data
-from use_tecnics import main, SIMPLE_METHODS
-from tester import get_vector_buys
-
-def get_info_in_week(data: pd.DataFrame, week: list) -> pd.DataFrame:
-    time_col = week[0] - pd.Timedelta(weeks=1)
-    data_week_raw = data.loc[time_col: week[1]]
-    velas_cerradas = read_data.ohlc_form(data_week_raw, f"{week[2][1]}min")["close"]
-    method_name = week[2][0]
-    params = week[2][2]
+    signal_mask = filtered_df['Signals'] != 0
+    signal_indices = filtered_df[signal_mask].index
     
-    df_week = main(method_name, velas_cerradas, params)
-    df_week = df_week.loc[week[0]: week[1]]
+    if len(signal_indices) == 0:
+        return filtered_df 
+
+    start_date = signal_indices.min()
+    end_date = signal_indices.max()
+
+    margen_tiempo = pd.Timedelta(minutes=30)
     
-    if len(df_week) == 0:
-        return pd.DataFrame()
-
-    f_i = df_week.index[0]
-    l_i = df_week.index[-1]
-    if df_week["Signals"][f_i] == -1:
-        f_i = df_week.index[1] if len(df_week) > 1 else f_i
-    if df_week["Signals"][l_i] == 1:
-        l_i = df_week.index[-2] if len(df_week) > 1 else l_i
-
-    return df_week.loc[f_i: l_i]
-
-def get_signals_and_prices(data: pd.DataFrame, ma_week: list) -> pd.DataFrame:
-    signals_and_prices = None
-    for week in ma_week:
-        data_week = get_info_in_week(data, week)
-
-        if signals_and_prices is None:
-            signals_and_prices = data_week
-        else:
-            signals_and_prices = pd.concat([signals_and_prices, data_week])
-    return signals_and_prices
-
-def get_features_cnn(data: pd.DataFrame, ma_week: list, window_size: int = 60) -> Tuple[np.ndarray, np.ndarray]:
-    """Extrae ventanas con una ventana ligeramente mayor para capturar más contexto."""
-    X_sequences = []
-    y_targets = []
-
-    for week in ma_week:
-        time_col = week[0] - pd.Timedelta(weeks=2) # Más historial de colchon
-        data_week = data.loc[time_col: week[1]]
-        prices = read_data.ohlc_form(data_week, f"{week[2][1]}min")["close"]
-        ma = SIMPLE_METHODS[week[2][0]](prices, week[2][2])
-        signals = get_vector_buys(ma, prices)[week[0]: week[1]]
-
-        if signals.empty: continue
-
-        buy_indices = signals[signals == 1].index
-        for inicio in buy_indices:
-            try:
-                pos_inicio = prices.index.get_loc(inicio)
-                if pos_inicio >= window_size:
-                    v_p = prices.iloc[pos_inicio - window_size : pos_inicio].values
-                    v_m = ma.iloc[pos_inicio - window_size : pos_inicio].values
-                    
-                    # Normalización robusta: distancia porcentual y log-retornos internos
-                    secuencia = (v_p - v_m) / v_m
-                    
-                    ventas = signals[(signals == -1) & (signals.index > inicio)]
-                    if not ventas.empty:
-                        tramo = prices.loc[inicio : ventas.index[0]]
-                        X_sequences.append(secuencia)
-                        y_targets.append(tramo.argmin())
-            except: continue
-
-    return np.array(X_sequences), np.array(y_targets)
-
-def build_deep_cnn(input_shape: tuple):
-    """Arquitectura CNN profunda con Dilated Convolutions y Residual Blocks."""
-    model = models.Sequential([
-        layers.Input(shape=input_shape),
+    if isinstance(real_data, pd.DataFrame):
+        close_series = real_data.iloc[:, 0]
+    else:
+        close_series = real_data
         
-        layers.Conv1D(64, kernel_size=5, padding='same'),
-        layers.BatchNormalization(),
-        layers.Activation('relu'),
-        layers.Conv1D(64, kernel_size=3, padding='same', dilation_rate=2),
-        layers.BatchNormalization(),
-        layers.Activation('relu'),
-        layers.MaxPooling1D(2),
+    close_slice = close_series.loc[start_date - margen_tiempo : end_date]
+    
+    features_df = create_features(close_slice)
+
+    valid_indices = signal_indices.intersection(features_df.index)
+    
+    if len(valid_indices) == 0:
+        return filtered_df
+    
+    cols = ['volatility', 'curvature', 'fft_1', 'fft_2', 'fft_3']
+    X_to_predict = features_df.loc[valid_indices, cols].fillna(0)
+    
+    probabilidades = modelo.predict_proba(X_to_predict)[:, 1]
+    
+    decisiones = (probabilidades >= umbral).astype(int)
+    decisiones_series = pd.Series(decisiones, index=valid_indices)
+    
+    filtered_df.loc[valid_indices, 'Signals'] = filtered_df.loc[valid_indices, 'Signals'] * decisiones_series
+    
+    invalid_indices = signal_indices.difference(valid_indices)
+    if len(invalid_indices) > 0:
+        filtered_df.loc[invalid_indices, 'Signals'] = 0
         
-        layers.Conv1D(128, kernel_size=3, padding='same', dilation_rate=4),
-        layers.BatchNormalization(),
-        layers.Activation('relu'),
-        layers.Conv1D(128, kernel_size=3, padding='same'),
-        layers.BatchNormalization(),
-        layers.Activation('relu'),
-        layers.GlobalAveragePooling1D(),
+    return filtered_df
+
+
+def get_fourier(series: pd.Series, window_size: int, num_harmonics: int) -> pd.DataFrame:
+    fft_df = pd.DataFrame(index=series.index)
+    for i in range(1, num_harmonics + 1):
+        fft_df[f'fft_{i}'] = np.nan
         
-        layers.Dense(256, activation='relu'),
-        layers.Dropout(0.3),
-        layers.Dense(128, activation='relu'),
-        layers.Dropout(0.2),
-        layers.Dense(64, activation='relu'),
-        layers.Dense(1)
-    ])
+    values = series.values
+    for i in range(window_size, len(values)):
+        window = values[i-window_size:i]
+        fft_vals = np.abs(np.fft.fft(window))
+        for h in range(1, num_harmonics + 1):
+            fft_df.iloc[i, h-1] = fft_vals[h]
+            
+    return fft_df
+
+def create_features(series: pd.Series) -> pd.DataFrame:
+    df = pd.DataFrame(index=series.index)
+    df['close'] = series
+    df['returns'] = series.pct_change()
+    df['volatility'] = df['returns'].rolling(14).std()
+    df['curvature'] = series.diff().diff()
     
-    opt = optimizers.Adam(learning_rate=0.0005)
-    model.compile(optimizer=opt, loss='huber')
-    return model
+    fft_features = get_fourier(series, 20, 3)
+    return pd.concat([df, fft_features], axis=1)
 
-def train_cnn_velas_model(X: np.ndarray, y: np.ndarray):
-    validos = ~np.isnan(X).any(axis=1) & ~np.isnan(y) & (y < 150)
-    X, y = X[validos], y[validos]
+def build_weekly_dataset(real_data: pd.DataFrame, weekly_ma_list: list, pip_value: float = 0.0001) -> tuple:
+    X_list = []
+    y_list = []
     
-    X = X.reshape((X.shape[0], X.shape[1], 1))
-    y_log = np.log1p(y)
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y_log, test_size=0.15, shuffle=True)
-
-    model = build_deep_cnn(input_shape=(X.shape[1], 1))
+    for start_date, end_date, ma_config in weekly_ma_list:
+        method = ma_config[0]
+        candle = int(ma_config[1])
+        params = ma_config[2:]
+        
+        max_lookback = max(params) if params else 100
+        pad_days = pd.Timedelta(days=max(10, (candle * max_lookback * 2) / 1440))
+        
+        slice_start = pd.to_datetime(start_date) - pad_days
+        slice_end = pd.to_datetime(end_date) + pd.Timedelta(days=1)
+        
+        data_slice = real_data[(real_data.index >= slice_start) & (real_data.index <= slice_end)]
+        if data_slice.empty:
+            continue
+            
+        ohlc_resampled = ohlc_form(data_slice, f"{candle}min")["close"]
+        features_df = create_features(ohlc_resampled)
+        
+        signals_df = main(method, ohlc_resampled, params)
+        if signals_df.empty:
+            continue
+            
+        signals_df['next_close'] = signals_df['Prices'].shift(-1)
+        
+        week_mask = (signals_df.index >= pd.to_datetime(start_date)) & (signals_df.index <= slice_end)
+        signals_week = signals_df[week_mask]
+        
+        common_idx = signals_week.index.intersection(features_df.index)
+        if common_idx.empty:
+            continue
+            
+        trades = features_df.loc[common_idx].copy()
+        trades['Signals'] = signals_week.loc[common_idx, 'Signals']
+        trades['Prices'] = signals_week.loc[common_idx, 'Prices']
+        trades['next_close'] = signals_week.loc[common_idx, 'next_close']
+        
+        trades = trades.dropna(subset=['next_close'])
+        if trades.empty:
+            continue
+            
+        trades['profit_raw'] = (trades['next_close'] - trades['Prices']) * trades['Signals']
+        trades['target'] = (trades['profit_raw'] > pip_value).astype(int)
+        
+        feature_cols = ['volatility', 'curvature', 'fft_1', 'fft_2', 'fft_3']
+        X_list.append(trades[feature_cols])
+        y_list.append(trades['target'])
+        
+    if not X_list:
+        return pd.DataFrame(), pd.Series()
+        
+    X_final = pd.concat(X_list).dropna()
+    y_final = pd.concat(y_list).loc[X_final.index]
     
-    lr_reducer = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10, min_lr=1e-6)
-    early_stop = callbacks.EarlyStopping(monitor='val_loss', patience=25, restore_best_weights=True)
+    return X_final, y_final
 
-    print(f"Entrenando CNN Profunda con {len(X_train)} ejemplos...")
-    model.fit(
-        X_train, y_train, 
-        epochs=300, 
-        batch_size=64, 
-        validation_split=0.1, 
-        callbacks=[lr_reducer, early_stop],
-        verbose=1
-    )
-
-    preds = np.expm1(model.predict(X_test)).flatten()
-    y_real = np.expm1(y_test)
+def train_model(X: pd.DataFrame, y: pd.Series):
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, shuffle=False)
     
-    mae = mean_absolute_error(y_real, np.round(preds))
-    print(f"\nMAE Alcanzado: {mae:.4f} velas.")
-
-    return model, mae
+    clf = RandomForestClassifier(n_estimators=300, max_depth=10, class_weight='balanced', random_state=42)
+    clf.fit(X_train, y_train)
+    
+    y_pred = clf.predict(X_test)
+    print(classification_report(y_test, y_pred))
+    
+    return clf
