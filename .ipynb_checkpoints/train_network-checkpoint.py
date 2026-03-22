@@ -32,6 +32,7 @@ def filter_signals_with_ml(signals_and_prices: pd.DataFrame, real_data, modelo, 
     valid_indices = signal_indices.intersection(features_df.index)
     
     if len(valid_indices) == 0:
+        filtered_df['Signals'] = 0
         return filtered_df
     
     cols = ['volatility', 'curvature', 'fft_1', 'fft_2', 'fft_3']
@@ -40,13 +41,31 @@ def filter_signals_with_ml(signals_and_prices: pd.DataFrame, real_data, modelo, 
     probabilidades = modelo.predict_proba(X_to_predict)[:, 1]
     
     decisiones = (probabilidades >= umbral).astype(int)
-    decisiones_series = pd.Series(decisiones, index=valid_indices)
+    decisiones_dict = dict(zip(valid_indices, decisiones))
     
-    filtered_df.loc[valid_indices, 'Signals'] = filtered_df.loc[valid_indices, 'Signals'] * decisiones_series
+    filtered_df['Signals'] = 0
     
-    invalid_indices = signal_indices.difference(valid_indices)
-    if len(invalid_indices) > 0:
-        filtered_df.loc[invalid_indices, 'Signals'] = 0
+    en_posicion = False
+    ultimo_indice_compra = None
+    
+    for idx in signal_indices:
+        orig_signal = signals_and_prices.loc[idx, 'Signals']
+        
+        if orig_signal == 1 and not en_posicion:
+            decision_ia = decisiones_dict.get(idx, 0)
+            
+            if decision_ia == 1:
+                filtered_df.loc[idx, 'Signals'] = 1
+                en_posicion = True
+                ultimo_indice_compra = idx
+                
+        elif orig_signal == -1 and en_posicion:
+            filtered_df.loc[idx, 'Signals'] = -1
+            en_posicion = False
+            ultimo_indice_compra = None
+            
+    if en_posicion and ultimo_indice_compra is not None:
+        filtered_df.loc[ultimo_indice_compra, 'Signals'] = 0
         
     return filtered_df
 
