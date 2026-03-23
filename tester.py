@@ -1,30 +1,50 @@
 import pandas as pd
 from numpy import float64, isnan, sqrt
 
-# Se retornan los kpi's en una tupla con este orden: hit ratio, risk reward ratio, profit ratio
+def backtest(signals_and_prices: pd.DataFrame, metrics: bool = False, fee: float = 0.0001):
+    prices = signals_and_prices["Prices"].values
+    signals = signals_and_prices["Signals"].values
 
-def backtest(signals_and_prices: pd.DataFrame, calq_sqn: bool = False):
-    trade_resume: pd.Series = signals_and_prices["Prices"].diff().fillna(0)
-    trade_resume = trade_resume[signals_and_prices["Signals"] == -1]
+    position = 0
+    entry_price = 0
+    returns = []
 
-    hr = hit_ratio(trade_resume)
-    rr = rr_ratio(trade_resume)
-    pr = profit_ratio(trade_resume)
-    tr = len(trade_resume)
-   
-    if calq_sqn:
-        mu = trade_resume.mean()
+    for i in range(len(signals)):
+        sig = signals[i]
 
-        sigma = trade_resume.std()
+        if sig == 1 and position == 0:
+            position = 1
+            entry_price = prices[i]
 
-        if isnan(sigma) or sigma == 0:
-            sqn = -10
-        else:
-            sqn = sqrt(min(tr, 100)) * (mu / sigma)
+        elif sig == -1 and position == 1:
+            exit_price = prices[i]
 
-        return hr, rr, pr, tr, sqn
+            ret = (exit_price / entry_price - 1) - 2 * fee
+            returns.append(ret)
 
-    return hr, rr, pr, tr
+            position = 0
+
+    returns = pd.Series(returns)
+
+    if len(returns) == 0:
+        if metrics:
+            return -10, 0, 0, 0, returns, 0, 0, 0
+        return -10, 0, 0, 0, returns
+
+    mu = returns.mean()
+    sigma = returns.std()
+
+    sharpe = -10 if sigma == 0 else mu / sigma
+    tr = len(returns)
+
+    if metrics:
+        ht = hit_ratio(returns)
+        rr = rr_ratio(returns)
+        pr = profit_ratio(returns)
+
+        return ht, rr, pr, tr
+
+    return sharpe, mu, sigma, tr, returns
 
 
 def get_vector_buys(man_back: pd.Series, real_data: pd.Series) -> pd.Series:
