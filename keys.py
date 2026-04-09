@@ -40,7 +40,7 @@ def fill_ohlc_dict(data, is_bid = False) -> None:
         data = read_data.read_asset(data)
 
     for i in range(1, candles+1):
-        pre_ohlc[i] = read_data.ohlc_form(data, str(i)+"min")
+        pre_ohlc[i] = read_data.ohlc_form(data, i, is_bid)
 
         if not is_bid:
             pre_ohlc[i] = pre_ohlc[i]["close"]

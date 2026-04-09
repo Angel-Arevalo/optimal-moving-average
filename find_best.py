@@ -8,6 +8,7 @@ from tester import backtest
 
 from numpy import exp, log, sqrt
 from typing import Union, Callable
+import numpy as np
 
 import keys
 import warnings
@@ -19,7 +20,7 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
         data = read_asset(data)
 
     keys.pre_ohlc = {}
-    keys.fill_ohlc_dict(data)
+    keys.fill_ohlc_dict(data, is_bid)
 
     best_result: list = None
     b_met: str = ""
@@ -74,10 +75,10 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
                 b_met = method
 
     if verbose:
-        print(f'Resultado obtenido entrenando desde {data.index[0].strftime("%Y-%m-%d")} hasta {data.index[-1].strftime("%Y-%m-%d")}')
+        #print(f'Resultado obtenido entrenando desde {data.index[0].strftime("%Y-%m-%d")} hasta {data.index[-1].strftime("%Y-%m-%d")}')
         print(f"Método: {b_met}, Datos optimizados {best_result}")
         print(f"\nhit ratio: {b_ht}\nrisk reward: {b_rr}\nprofit factor: {b_pr}\ntrades: {b_trades}")
-        print(f"Resultado de sobre ajuste {score}")
+        print(f"Resultado de sobre ajuste {b_score}")
 
     best_result.insert(0, b_met)
 

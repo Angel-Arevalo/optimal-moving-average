@@ -1,5 +1,6 @@
 import pandas as pd
 from typing import Union
+import polars as pl
 
 # Se lee la info para tener un DataFrame con la forma time | spot
 def read_asset(asset_name: str) -> pd.DataFrame:
@@ -16,11 +17,11 @@ def read_asset(asset_name: str) -> pd.DataFrame:
 #                                   open-high-low-close
 #
 # Intervalos válidos: 1min, 5min, 15min, 1H, ...
-def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: str, is_bid: bool = False) -> pd.DataFrame:
+def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, is_bid: bool = False) -> pd.DataFrame:
     if not is_bid:
 
         if isinstance(asset, str):
-            return read_asset(asset)["Precio Spot"].resample(time_rule).ohlc().ffill().bfill()
+            return read_asset(asset)["Precio Spot"].resample(str(time_rule)+"min").ohlc().ffill().bfill()
 
         return asset["Precio Spot"].resample(time_rule).ohlc().ffill() 
 
@@ -37,7 +38,7 @@ def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: str, is_bid: bool = Fa
     ).sort("time")
 
     df_resampled = (
-        lf.group_by_dynamic("time", every=time_rule)
+        lf.group_by_dynamic("time", every=str(time_rule)+"m")
         .agg([
             pl.col("<BID>").last().alias("bid"),
             pl.col("<ASK>").last().alias("ask")
