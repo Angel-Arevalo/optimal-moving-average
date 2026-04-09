@@ -6,7 +6,7 @@ en los demas entornos de python.
 Se hace uso de las librerias pandas, numpy, matplotlib y skopt (scikit-optimize). A continuación se colocan los comandos para hacer
 la instalación necesaria sobre el venv:
 
-`pip install pandas scikit-optimize matplotlib ta-lib`
+`pip install pandas scikit-optimize matplotlib ta-lib polars`
 ## Cómo funciona?
 
 El funcionamiento es bastante simple. Primero debemos fijar qué objetivo tenemos, ya sea, tener buenos indicadores técnicos 
