@@ -33,11 +33,14 @@ threshold: float = 3.0
 # pre-calculo de ohlc
 pre_ohlc: dict = {}
 
-def fill_ohlc_dict(data) -> None:
+def fill_ohlc_dict(data, is_bid = False) -> None:
     pre_ohlc.clear()
 
-    if isinstance(data, str):
+    if not is_bid and isinstance(data, str):
         data = read_data.read_asset(data)
 
     for i in range(1, candles+1):
-        pre_ohlc[i] = read_data.ohlc_form(data, str(i)+"min")["close"]
+        pre_ohlc[i] = read_data.ohlc_form(data, str(i)+"min")
+
+        if not is_bid:
+            pre_ohlc[i] = pre_ohlc[i]["close"]

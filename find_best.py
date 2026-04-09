@@ -14,8 +14,8 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-def opti_main(data: Union[pd.DataFrame, str], verbose: bool = True, engie: str = "fm") -> list:
-    if isinstance(data, str):
+def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: bool = True, engie: str = "fm") -> list:
+    if not is_bid and isinstance(data, str):
         data = read_asset(data)
 
     keys.pre_ohlc = {}

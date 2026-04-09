@@ -57,7 +57,17 @@ def main(method: str, data: pd.Series, adicional_data: Union[list, int]) -> pd.D
         else:
             raise ValueError(f"{method} no implementado")
 
-    ma = pd.concat([ma, data], axis = 1, join = "inner")
+    if len(data.columns) > 1:
+        precios = np.where(ma == 1, bid_ask['ask'], bid_ask['bid'])
+
+        ma = pd.DataFrame({
+            "Signals": ma,
+            "Prices": precios
+        }, index=ma.index)
+
+    else:
+        ma = pd.concat([ma, data], axis = 1, join = "inner")
+
     ma.columns = ["Signals", "Prices"]
     return ma
 
