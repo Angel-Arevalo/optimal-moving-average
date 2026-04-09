@@ -13,9 +13,6 @@ def main(method: str, data: pd.Series, adicional_data: Union[list, int]) -> pd.D
     if method not in avalible_methods:
         raise ValueError("Not avalible method")
 
-    if isinstance(adicional_data, int) and method in complex_methods:
-        raise ValueError("Todo método simple usa solo lookback")
-
     if method in avalible_methods:
         if isinstance(adicional_data, list):
             adicional_data = adicional_data[0]
