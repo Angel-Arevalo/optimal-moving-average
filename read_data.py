@@ -19,10 +19,8 @@ def read_asset(asset_name: str) -> pd.DataFrame:
 # Intervalos válidos: 1min, 5min, 15min, 1H, ...
 def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, is_bid: bool = False) -> pd.DataFrame:
     if not is_bid:
-
         if isinstance(asset, str):
             return read_asset(asset)["Precio Spot"].resample(str(time_rule)+"min").ohlc().ffill().bfill()
-
         return asset["Precio Spot"].resample(time_rule).ohlc().ffill() 
 
     if isinstance(asset, str):
@@ -32,6 +30,20 @@ def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, is_bid: bool = Fa
             lf = pl.scan_parquet(f"Data/{asset}")
     else:
         lf = pl.from_pandas(asset.reset_index()).lazy()
+
+    actual_cols = lf.columns
+    rename_map = {}
+
+    if "bid" in actual_cols: rename_map["bid"] = "bid"
+    elif "<BID>" in actual_cols: rename_map["<BID>"] = "bid"
+
+    if "ask" in actual_cols: rename_map["ask"] = "ask"
+    elif "<ASK>" in actual_cols: rename_map["<ASK>"] = "ask"
+
+    if "bid" not in rename_map.values() or "ask" not in rename_map.values():
+        raise ValueError(f"No se encontraron columnas de Bid/Ask. Columnas detectadas: {actual_cols}")
+
+    lf = lf.rename(rename_map)
 
     lf = lf.with_columns(
         pl.col("time").cast(pl.Datetime)
@@ -50,4 +62,3 @@ def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, is_bid: bool = Fa
     )
 
     return df_resampled.to_pandas().set_index("time").ffill().bfill()
-
