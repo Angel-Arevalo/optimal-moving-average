@@ -3,7 +3,7 @@ from skopt.space import Real, Integer, Categorical
 import pandas as pd
 
 from read_data import ohlc_form, read_asset
-from use_tecnics import main, complex_methods, avalible_methods
+from use_tecnics import main, avalible_methods
 from tester import backtest
 
 from numpy import exp, log, sqrt
@@ -36,16 +36,7 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
         def objective(param: list, kpis: bool = True) -> float:
             ohlc: pd.DataFrame = keys.pre_ohlc[param[0]]
 
-            if method not in complex_methods:
-                real_param = param[1]
-            else:
-                real_param: list = param[1:]
-
-            if method == "MACD":
-                if real_param[0] <= real_param[1]:
-                    temp: int = real_param[0]
-                    real_param[0] = real_param[1]
-                    real_param[1] = temp
+            real_param = param[1]
 
             signals_prices: pd.DataFrame = main(method, ohlc, real_param)
 
@@ -148,26 +139,6 @@ def make_search_space(method: str) -> list:
         search_space.append(Categorical([1], name="candle"))
 
     search_space.append(Integer(2, keys.lookbacks, name="lookback"))
-
-    if method in complex_methods:
-        if method == "MACD":
-            search_space.append(Integer(2, keys.lookbacks_min, name="lookback_min"))
-            search_space.append(Integer(2, keys.signal_back, name="signal_back"))
-
-        elif method == "BBANDS":
-            search_space.append(Real(1.0, keys.dev_up, name="dev_up"))
-            search_space.append(Real(1.0, keys.dev_dn, name="dev_dn"))
-            search_space.append(Categorical(list(range(keys.matype + 1)), name="matype"))
-
-        elif method == "DONCHIAN":
-            search_space.append(Integer(2, keys.lookbacks_min, name="lookback_lower"))
-
-        elif method == "ZSCORE_EMA":
-            search_space.append(Real(0.0, keys.threshold, name="threshold"))
-            search_space.append(Categorical(list(range(keys.matype + 1)), name="matype"))
-
-        else:
-            raise ValueError(f"{method} no es un método implementado aún")
 
     return search_space
 

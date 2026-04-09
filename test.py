@@ -3,6 +3,8 @@ import new_pipeline
 import pandas as pd
 from find_best import opti_main
 import keys
-keys.calls = 10
-keys.methods = {"SMA"}
-opti_main("EURUSD_TbT_202503310005_202603301319.parquet", True)
+keys.calls = 20
+keys.candles = 20
+keys.methods = {"SMA", "EMA", "DEMA", "TRIMA"}
+opti_main("EURUSD_ask_bid.parquet", True)
+

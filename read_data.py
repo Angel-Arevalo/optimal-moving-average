@@ -40,8 +40,8 @@ def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, is_bid: bool = Fa
     df_resampled = (
         lf.group_by_dynamic("time", every=str(time_rule)+"m")
         .agg([
-            pl.col("<BID>").last().alias("bid"),
-            pl.col("<ASK>").last().alias("ask")
+            pl.col("bid").last(),
+            pl.col("ask").last()
         ])
         .with_columns(
             ((pl.col("bid") + pl.col("ask")) / 2).alias("Precio Spot")
