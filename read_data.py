@@ -5,9 +5,9 @@ import polars as pl
 # Se lee la info para tener un DataFrame con la forma time | spot
 def read_asset(asset_name: str) -> pd.DataFrame:
     if asset_name[-1] == "v":
-        asset_info: pd.DataFrame =  pd.read_csv(f"Data//{asset_name}")
+        asset_info: pd.DataFrame =  pd.read_csv(asset_name)
     elif asset_name[-1] == "t":
-        asset_info: pd.DataFrame = pd.read_parquet(f"Data/{asset_name}")
+        asset_info: pd.DataFrame = pd.read_parquet(asset_name)
     
     asset_info.columns = ["time", "Precio Spot"]
     asset_info["time"] = pd.to_datetime(asset_info["time"])
@@ -25,9 +25,9 @@ def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, is_bid: bool = Fa
 
     if isinstance(asset, str):
         if asset.endswith(".csv"):
-            lf = pl.scan_csv(f"Data/{asset}")
+            lf = pl.scan_csv(asset)
         else:
-            lf = pl.scan_parquet(f"Data/{asset}")
+            lf = pl.scan_parquet(asset)
     else:
         lf = pl.from_pandas(asset.reset_index()).lazy()
 
