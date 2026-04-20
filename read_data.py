@@ -21,7 +21,7 @@ def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, is_bid: bool = Fa
     if not is_bid:
         if isinstance(asset, str):
             return read_asset(asset)["Precio Spot"].resample(str(time_rule)+"min").ohlc().ffill().bfill()
-        return asset["Precio Spot"].resample(time_rule).ohlc().ffill() 
+        return asset["Precio Spot"].resample(str(time_rule) + "min").ohlc().ffill() 
 
     if isinstance(asset, str):
         if asset.endswith(".csv"):

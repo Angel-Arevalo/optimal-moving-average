@@ -17,7 +17,7 @@ def main(method: str, data: pd.Series, adicional_data: Union[list, int]) -> pd.D
         if isinstance(adicional_data, list):
             adicional_data = adicional_data[0]
 
-        if len(data.columns) > 1:
+        if isinstance(data, pd.DataFrame) and len(data.columns) > 1:
             ma: pd.Series = SIMPLE_METHODS[method](data["Precio Spot"], adicional_data)
             ma = get_vector_buys(ma, data["Precio Spot"])
         else:
@@ -27,7 +27,7 @@ def main(method: str, data: pd.Series, adicional_data: Union[list, int]) -> pd.D
     else:
         raise ValueError(f"{method} no implementado")
 
-    if len(data.columns) > 1:
+    if isinstance(data, pd.DataFrame) and len(data.columns) > 1:
         filter = data.loc[ma.index]
 
         precios = np.where(ma == 1, filter['ask'], filter['bid'])
