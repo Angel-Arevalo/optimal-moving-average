@@ -9,7 +9,7 @@ avalible_methods: set = {"SMA", "EMA", "WMA", "DEMA", "TEMA", "TRIMA", "KAMA", "
 # actualmente este método va a retornar el vector de compras y ventas
 # De ahora en adelanta se asume que data ya es el vector de información
 # final
-def main(method: str, data: pd.Series, adicional_data: Union[list, int]) -> pd.DataFrame:
+def main(method: str, data: pd.Series, adicional_data: Union[list, int], shorts: bool = False) -> pd.DataFrame:
     if method not in avalible_methods:
         raise ValueError("Not avalible method")
 
@@ -19,10 +19,10 @@ def main(method: str, data: pd.Series, adicional_data: Union[list, int]) -> pd.D
 
         if isinstance(data, pd.DataFrame) and len(data.columns) > 1:
             ma: pd.Series = SIMPLE_METHODS[method](data["Precio Spot"], adicional_data)
-            ma = get_vector_buys(ma, data["Precio Spot"])
+            ma = get_vector_buys(ma, data["Precio Spot"], shorts)
         else:
             ma: pd.Series = SIMPLE_METHODS[method](data, adicional_data)
-            ma = get_vector_buys(ma, data)
+            ma = get_vector_buys(ma, data, shorts)
 
     else:
         raise ValueError(f"{method} no implementado")

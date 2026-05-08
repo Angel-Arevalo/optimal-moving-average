@@ -38,7 +38,7 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
 
             real_param = param[1]
 
-            signals_prices: pd.DataFrame = main(method, ohlc, real_param)
+            signals_prices: pd.DataFrame = main(method, ohlc, real_param, shorts)
 
             hr, rr, pr, tr, sqn = backtest(signals_prices, True, shorts)
             if kpis:
@@ -69,7 +69,8 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
         #print(f'Resultado obtenido entrenando desde {data.index[0].strftime("%Y-%m-%d")} hasta {data.index[-1].strftime("%Y-%m-%d")}')
         print(f"Método: {b_met}, Datos optimizados {best_result}")
         print(f"\nhit ratio: {b_ht}\nrisk reward: {b_rr}\nprofit factor: {b_pr}\ntrades: {b_trades}")
-        print(f"Resultado de sobre ajuste {b_score}")
+        print(f"Resultado de estabilidad {b_score}")
+        print(f"Operando {"cortos" if shorts else "largos"}" )
 
     best_result.insert(0, b_met)
 
