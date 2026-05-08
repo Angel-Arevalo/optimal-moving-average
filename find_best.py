@@ -15,7 +15,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: bool = True, engie: str = "fm") -> list:
+def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: bool = True, engie: str = "fm", shorts: bool = False) -> list:
     if not is_bid and isinstance(data, str):
         data = read_asset(data)
 
@@ -40,7 +40,7 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
 
             signals_prices: pd.DataFrame = main(method, ohlc, real_param)
 
-            hr, rr, pr, tr, sqn = backtest(signals_prices, True)
+            hr, rr, pr, tr, sqn = backtest(signals_prices, True, shorts)
             if kpis:
                 return -f(hr, rr, pr, tr, sqn)
 

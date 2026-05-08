@@ -1,9 +1,13 @@
 import pandas as pd
 from numpy import float64, isnan, sqrt
 
-def backtest(signals_and_prices: pd.DataFrame, calq_sqn: bool = False):
+def backtest(signals_and_prices: pd.DataFrame, calq_sqn: bool = False, shorts: bool = False):
     trade_resume: pd.Series = signals_and_prices["Prices"].diff().fillna(0)
-    trade_resume = trade_resume[signals_and_prices["Signals"] == -1]
+
+    if shorts:
+        trade_resume = trade_resume[signals_and_prices["Signals"] == 1]
+    else:
+        trade_resume = trade_resume[signals_and_prices["Signals"] == -1]
 
     hr = hit_ratio(trade_resume)
     rr = rr_ratio(trade_resume)
