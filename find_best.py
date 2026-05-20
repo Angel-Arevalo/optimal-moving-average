@@ -30,8 +30,8 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
     b_trades: int = 0
     b_score: float = 0
 
+    space: list = make_search_space()
     for method in keys.methods:
-        space: list = make_search_space(method)
 
         def objective(param: list, kpis: bool = True) -> float:
             ohlc: pd.DataFrame = keys.pre_ohlc[param[0]]
@@ -78,7 +78,7 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
 
 def f(hr: float, rr: float, pr: float, tr: int, sqn: float) -> float:
     if rr < 1.0 or pr < 1.1:
-        return 10
+        return -10
 
     loss = 1 - hr
 
@@ -86,8 +86,7 @@ def f(hr: float, rr: float, pr: float, tr: int, sqn: float) -> float:
 
     expecty = expecty*sqrt(tr)
 
-    if pr > 0:
-        expecty += log(pr)
+    expecty += log(pr)
 
     return expecty
 
@@ -122,11 +121,8 @@ def optimizer(objective: Callable, space: list, engie: str = "fm") -> tuple:
 # Se asume que el primer elemento de extras es el elemento que 
 # equivale a lookbac de cada método 
 
-def make_search_space(method: str) -> list:
+def make_search_space() -> list:
     search_space: list = []
-
-    if method not in keys.methods:
-        raise ValueError("Método no aceptado")
 
     if keys.lookbacks <= 1:
         raise ValueError("Invalido espacio de búsqueda para lookback")

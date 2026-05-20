@@ -29,7 +29,7 @@ def backtest(signals_and_prices: pd.DataFrame, calq_sqn: bool = False, shorts: b
     return hr, rr, pr, tr
 
 
-def get_vector_buys(man_back: pd.Series, real_data: pd.Series, shorts: bool = False) -> pd.Series:
+def get_vector_buys(man_back: pd.Series, real_data: pd.Series) -> pd.Series:
     pre_man: pd.Series = man_back.shift(1)
     pre_data: pd.Series = real_data.shift(1)
 
