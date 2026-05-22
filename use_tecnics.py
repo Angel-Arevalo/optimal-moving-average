@@ -19,10 +19,10 @@ def main(method: str, data: pd.Series, adicional_data: Union[list, int], shorts:
 
         if isinstance(data, pd.DataFrame) and len(data.columns) > 1:
             ma: pd.Series = SIMPLE_METHODS[method](data["Precio Spot"], adicional_data)
-            ma = get_vector_buys(ma, data["Precio Spot"], shorts)
+            ma = get_vector_buys(ma, data["Precio Spot"], nooh_data, shorts)
         else:
             ma: pd.Series = SIMPLE_METHODS[method](data, adicional_data)
-            ma = get_vector_buys(ma, data, shorts)
+            ma = get_vector_buys(ma, data, nooh_data, shorts)
 
     else:
         raise ValueError(f"{method} no implementado")

@@ -16,11 +16,13 @@ warnings.filterwarnings("ignore")
 
 
 def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: bool = True, engie: str = "fm", shorts: bool = False) -> list:
+
     if not is_bid and isinstance(data, str):
         data = read_asset(data)
 
     keys.pre_ohlc = {}
     keys.fill_ohlc_dict(data, is_bid)
+
 
     best_result: list = None
     b_met: str = ""

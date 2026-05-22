@@ -17,12 +17,13 @@ pre_ohlc: dict = {}
 
 def fill_ohlc_dict(data, is_bid = False) -> None:
     pre_ohlc.clear()
+    data_ = data.copy()
 
-    if not is_bid and isinstance(data, str):
-        data = read_data.read_asset(data)
+    if not is_bid and isinstance(data_, str):
+        data_ = read_data.read_asset(data_)
 
     for i in range(1, candles+1):
-        pre_ohlc[i] = read_data.ohlc_form(data, i, is_bid)
+        pre_ohlc[i] = read_data.ohlc_form(data_, i, is_bid)
 
         if not is_bid:
             pre_ohlc[i] = pre_ohlc[i]["close"]

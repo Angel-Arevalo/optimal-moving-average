@@ -30,37 +30,42 @@ def backtest(signals_and_prices: pd.DataFrame, calq_sqn: bool = False, shorts: b
 
 
 def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.DataFrame = None, shorts: bool = False) -> pd.Series:
+
     pre_man: pd.Series = man_back.shift(1)
     pre_data: pd.Series = real_data.shift(1)
 
-    # Señales de cruce de moving average, 
+    # Señales de cruce de moving average
     signal_buy: pd.Series = ((pre_man <= pre_data) & (man_back > real_data)).astype(int)
     signal_sell: pd.Series = ((pre_man > pre_data) & (man_back <= real_data)).astype(int)
 
-    # En el vector de compra o venta aparece un 1 como compra, un -1 como venta
-    # y 0 indica no hacer nada
-    vector_buy: pd.Series = (signal_buy - signal_sell)
-    vector_buy = vector_buy[(vector_buy != 0) & (vector_buy.notna())]
+    # En el vector de compra o venta aparece un 1 como compra, un -1 como venta y 0 indica no hacer nada
+    vector_buy: pd.Series = (signal_buy - signal_sell).fillna(0)
+    vector_buy = vector_buy[(vector_buy != 0)]
 
     if nooh_data is not None:
+        
+        fridays_data = real_data[real_data.index.dayofweek == 4]
+
+        last_friday_timestamps = fridays_data.groupby(fridays_data.index.date).apply(lambda x: x.index.max())
+
         friday: pd.Series = vector_buy[vector_buy.index.dayofweek == 4]
         friday = friday.groupby(friday.index.date).last()
 
         signals: list = []
         time_sig: list = []
+        
         for date, sig in friday.items():
-            if shorts:
-                if sig == -1:
-                    signals.append(1)
-
-                    time_sig.append(pd.Timestamp(f"{date} 23:50:00"))
+            if date in last_friday_timestamps.index:
+                real_timestamp = last_friday_timestamps[date]
+                
+                if shorts:
+                    if sig == -1:
+                        signals.append(1)
+                        time_sig.append(real_timestamp)
                 else:
                     if sig == 1:
                         signals.append(-1)
-
-                        time_sig.append(pd.Timestamp(f"{date} 23:50:00"))
-
-        print(time_sig, signals)
+                        time_sig.append(real_timestamp)
 
         if len(signals) > 0:
             friday = pd.Series(signals, index=time_sig)
@@ -70,7 +75,8 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.Dat
 
             vector_buy = vector_buy[vector_buy != vector_buy.shift(1)]
 
-    return vector_buy[vector_buy != 0]
+
+    return vector_buy
 
 def hit_ratio(trade_resume: pd.Series) -> float:
     if len(trade_resume) == 0:
