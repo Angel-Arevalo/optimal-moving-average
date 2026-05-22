@@ -29,7 +29,7 @@ def backtest(signals_and_prices: pd.DataFrame, calq_sqn: bool = False, shorts: b
     return hr, rr, pr, tr
 
 
-def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.DataFrame = None) -> pd.Series:
+def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.DataFrame = None, shorts: bool = False) -> pd.Series:
     pre_man: pd.Series = man_back.shift(1)
     pre_data: pd.Series = real_data.shift(1)
 
@@ -59,6 +59,8 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.Dat
                         signals.append(-1)
 
                         time_sig.append(pd.Timestamp(f"{date} 23:50:00"))
+
+        print(time_sig, signals)
 
         if len(signals) > 0:
             friday = pd.Series(signals, index=time_sig)

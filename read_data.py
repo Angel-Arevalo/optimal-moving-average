@@ -8,7 +8,7 @@ def read_asset(asset_name: str) -> pd.DataFrame:
         asset_info: pd.DataFrame =  pd.read_csv(asset_name)
     elif asset_name[-1] == "t":
         asset_info: pd.DataFrame = pd.read_parquet(asset_name)
-    
+
     asset_info.columns = ["time", "Precio Spot"]
     asset_info["time"] = pd.to_datetime(asset_info["time"])
     return asset_info.set_index("time").dropna()
