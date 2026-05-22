@@ -9,7 +9,7 @@ avalible_methods: set = {"SMA", "EMA", "WMA", "DEMA", "TEMA", "TRIMA", "KAMA", "
 # actualmente este método va a retornar el vector de compras y ventas
 # De ahora en adelanta se asume que data ya es el vector de información
 # final
-def main(method: str, data: pd.Series, adicional_data: Union[list, int], shorts: bool = False) -> pd.DataFrame:
+def main(method: str, data: pd.Series, adicional_data: Union[list, int], shorts: bool = False, nooh_data: pd.DataFrame = None) -> pd.DataFrame:
     if method not in avalible_methods:
         raise ValueError("Not avalible method")
 

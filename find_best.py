@@ -38,7 +38,7 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
 
             real_param = param[1]
 
-            signals_prices: pd.DataFrame = main(method, ohlc, real_param, shorts)
+            signals_prices: pd.DataFrame = main(method, ohlc, real_param, shorts, data)
 
             hr, rr, pr, tr, sqn = backtest(signals_prices, True, shorts)
             if kpis:

@@ -1,5 +1,5 @@
 import pandas as pd
-from numpy import float64, isnan, sqrt
+from numpy import float64, isnan, sqrt, nan
 
 def backtest(signals_and_prices: pd.DataFrame, calq_sqn: bool = False, shorts: bool = False):
     trade_resume: pd.Series = signals_and_prices["Prices"].diff().fillna(0)
@@ -29,7 +29,7 @@ def backtest(signals_and_prices: pd.DataFrame, calq_sqn: bool = False, shorts: b
     return hr, rr, pr, tr
 
 
-def get_vector_buys(man_back: pd.Series, real_data: pd.Series) -> pd.Series:
+def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.DataFrame = None) -> pd.Series:
     pre_man: pd.Series = man_back.shift(1)
     pre_data: pd.Series = real_data.shift(1)
 
@@ -40,7 +40,33 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series) -> pd.Series:
     # En el vector de compra o venta aparece un 1 como compra, un -1 como venta
     # y 0 indica no hacer nada
     vector_buy: pd.Series = (signal_buy - signal_sell)
-    vector_buy = vector_buy.fillna(0)
+    vector_buy = vector_buy[(vector_buy != 0) & (vector_buy.notna())]
+
+    if nooh_data is not None:
+        friday: pd.Series = vector_buy[vector_buy.index.dayofweek == 4]
+        friday = friday.groupby(friday.index.date).last()
+
+        signals: list = []
+        time_sig: list = []
+        for date, sig in friday.items():
+            if shorts:
+                if sig == -1:
+                    signals.append(1)
+
+                    time_sig.append(pd.Timestamp(f"{date} 23:50:00"))
+                else:
+                    if sig == 1:
+                        signals.append(-1)
+
+                        time_sig.append(pd.Timestamp(f"{date} 23:50:00"))
+
+        if len(signals) > 0:
+            friday = pd.Series(signals, index=time_sig)
+
+            vector_buy = pd.concat([vector_buy, friday]).sort_index()
+            vector_buy = vector_buy[~vector_buy.index.duplicated(keep='last')]
+
+            vector_buy = vector_buy[vector_buy != vector_buy.shift(1)]
 
     return vector_buy[vector_buy != 0]
 
