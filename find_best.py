@@ -31,6 +31,7 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
     b_pr: float = 0
     b_trades: int = 0
     b_score: float = 0
+    b_mae: float = 0
 
     space: list = make_search_space()
     for method in keys.methods:
@@ -42,21 +43,21 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
 
             signals_prices: pd.DataFrame = main(method, ohlc, real_param, shorts, data)
 
-            hr, rr, pr, tr, sqn = backtest(signals_prices, True, shorts)
+            hr, rr, pr, tr, mae, sqn = backtest(signals_prices, ohlc, True, shorts)
             if kpis:
-                return -f(hr, rr, pr, tr, sqn)
+                return -f(hr, rr, pr, tr, mae)
 
-            return (sqn, hr, rr, pr, tr)
+            return (sqn, hr, rr, pr, tr, mae)
 
         result: list = optimizer(objective, space, engie)
 
         if best_result is None:
             best_result = result
-            b_score, b_ht, b_rr, b_pr, b_trades = objective(result, False)
+            b_score, b_ht, b_rr, b_pr, b_trades, b_mae = objective(result, False)
             b_met = method
 
         else:
-            score, ht, rr, pr, tr = objective(result, False)
+            score, ht, rr, pr, tr, mae = objective(result, False)
 
             if b_score < score:
                 b_score = score
@@ -66,19 +67,21 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
                 b_trades= tr
                 best_result = result
                 b_met = method
+                b_mae = mae
 
     if verbose:
         #print(f'Resultado obtenido entrenando desde {data.index[0].strftime("%Y-%m-%d")} hasta {data.index[-1].strftime("%Y-%m-%d")}')
         print(f"Método: {b_met}, Datos optimizados {best_result}")
         print(f"\nhit ratio: {b_ht}\nrisk reward: {b_rr}\nprofit factor: {b_pr}\ntrades: {b_trades}")
         print(f"Resultado de estabilidad {b_score}")
+        print(f"Mae {b_mae}")
         print(f"Operando {"cortos" if shorts else "largos"}" )
 
     best_result.insert(0, b_met)
 
     return best_result
 
-def f(hr: float, rr: float, pr: float, tr: int, sqn: float) -> float:
+def f(hr: float, rr: float, pr: float, tr: int, mae: float) -> float:
     if rr < 1.0 or pr < 1.1:
         return -10
 
@@ -90,7 +93,7 @@ def f(hr: float, rr: float, pr: float, tr: int, sqn: float) -> float:
 
     expecty += log(pr)
 
-    return expecty
+    return expecty/mae if mae != 0 else expecty
 
 def optimizer(objective: Callable, space: list, engie: str = "fm") -> tuple:
     if engie == "gp":
@@ -140,15 +143,3 @@ def make_search_space() -> list:
     search_space.append(Integer(2, keys.lookbacks, name="lookback"))
 
     return search_space
-
-# Cada resultado tiene la forma [metodo, candle, añadidos]
-def read_results(result: list, real_data: pd.DataFrame) -> None:
-    ohlc = ohlc_form(real_data, str(result[1]) + "min")["close"]
-
-    vector_perform: pd.DataFrame = main(result[0], ohlc, result[2:])
-
-    hr, rr, pr, tr = backtest(vector_perform)
-
-    print("Rendimiento de una ma con:")
-    print(f"método: {result[0]}, vela: {result[1]}, añadidos: {result[2:]}")
-    print(f"hit ratio: {hr}\nrisk reward: {rr}\nprofit factor: {pr}\ntrades: {tr}\n\n")

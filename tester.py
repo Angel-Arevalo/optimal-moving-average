@@ -1,8 +1,10 @@
 import pandas as pd
 from numpy import float64, isnan, sqrt, nan
 
-def backtest(signals_and_prices: pd.DataFrame, calq_sqn: bool = False, shorts: bool = False):
+def backtest(signals_and_prices: pd.DataFrame, ohlc_data: pd.DataFrame, calq_sqn: bool = False, shorts: bool = False):
     trade_resume: pd.Series = signals_and_prices["Prices"].diff().fillna(0)
+
+    mae_val: float = mae(signals_and_prices, ohlc_data, shorts)
 
     if shorts:
         trade_resume = -trade_resume[signals_and_prices["Signals"] == 1]
@@ -24,9 +26,9 @@ def backtest(signals_and_prices: pd.DataFrame, calq_sqn: bool = False, shorts: b
         else:
             sqn = sqrt(min(tr, 100)) * (mu / sigma)
 
-        return hr, rr, pr, tr, sqn
+        return hr, rr, pr, tr, mae_val, sqn
 
-    return hr, rr, pr, tr
+    return hr, rr, pr, tr, mae_val
 
 
 def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.DataFrame = None, shorts: bool = False) -> pd.Series:
@@ -43,7 +45,7 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.Dat
     vector_buy = vector_buy[(vector_buy != 0)]
 
     if nooh_data is not None:
-        
+
         fridays_data = real_data[real_data.index.dayofweek == 4]
 
         last_friday_timestamps = fridays_data.groupby(fridays_data.index.date).apply(lambda x: x.index.max())
@@ -53,11 +55,11 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.Dat
 
         signals: list = []
         time_sig: list = []
-        
+
         for date, sig in friday.items():
             if date in last_friday_timestamps.index:
                 real_timestamp = last_friday_timestamps[date]
-                
+
                 if shorts:
                     if sig == -1:
                         signals.append(1)
@@ -108,3 +110,27 @@ def profit_ratio(trade_resume: pd.Series) -> float:
 
 def get_total_money(trade_resume: pd.Series) -> float:
     return trade_resume.sum()
+
+def mae(signals_and_prices: pd.DataFrame, ohlc_data: pd.DataFrame, short: bool):
+    if len(signals_and_prices)//2 == 0:
+        return 0
+
+    indices: pd.Series = signals_and_prices.index
+    mae_val: float = 0
+
+    # Actualemente se recoore la lista así para tomar 
+    # todos los pares de inicio-fin del trade
+    for i in range(len(indices)//2):
+        precio_entrada: float = signals_and_prices.loc[indices[2*i], "Prices"]
+        periodo: pd.Series = ohlc_data.loc[indices[2*i]: indices[2*i +1]]
+
+        peak_val: float = periodo["bid"].max() if short else periodo["ask"].min()
+ 
+        # siempre debe calcularse el precio de entrada menos el valor al
+        # que se necesita, pero hay que tener en cuenta el signo
+        trade_mae = (-1 if short else 1) * (precio_entrada - peak_val)
+        trade_mae = (trade_mae * 100)/precio_entrada
+
+        mae_val += trade_mae
+
+    return mae_val/(len(signals_and_prices)//2)
