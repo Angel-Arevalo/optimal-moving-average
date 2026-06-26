@@ -16,49 +16,65 @@ def read_asset(asset_name: str) -> pd.DataFrame:
 # Se organiza la info en el formato ohlc, 
 #                                   open-high-low-close
 #
-# Intervalos válidos: 1min, 5min, 15min, 1H, ...
-def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, is_bid: bool = False) -> pd.DataFrame:
+def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, is_bid: bool = False, include_low: bool = False) -> pd.DataFrame:
+
     if not is_bid:
         if isinstance(asset, str):
             return read_asset(asset)["Precio Spot"].resample(str(time_rule)+"min").ohlc().ffill().bfill()
-        return asset["Precio Spot"].resample(str(time_rule) + "min").ohlc().ffill() 
+        return asset["Precio Spot"].resample(str(time_rule) + "min").ohlc().ffill()
 
     if isinstance(asset, str):
         if asset.endswith(".csv"):
-            lf = pl.scan_csv(asset)
+            df = pd.read_csv(asset)
         else:
-            lf = pl.scan_parquet(asset)
+            df = pd.read_parquet(asset)
     else:
-        lf = pl.from_pandas(asset.reset_index()).lazy()
+        df = asset.reset_index()
 
-    actual_cols = lf.columns
+    actual_cols = df.columns
     rename_map = {}
-
-    if "bid" in actual_cols: rename_map["bid"] = "bid"
-    elif "<BID>" in actual_cols: rename_map["<BID>"] = "bid"
-
-    if "ask" in actual_cols: rename_map["ask"] = "ask"
-    elif "<ASK>" in actual_cols: rename_map["<ASK>"] = "ask"
+    if "bid" in actual_cols:
+        rename_map["bid"] = "bid"
+    elif "<BID>" in actual_cols:
+        rename_map["<BID>"] = "bid"
+    if "ask" in actual_cols:
+        rename_map["ask"] = "ask"
+    elif "<ASK>" in actual_cols:
+        rename_map["<ASK>"] = "ask"
 
     if "bid" not in rename_map.values() or "ask" not in rename_map.values():
-        raise ValueError(f"No se encontraron columnas de Bid/Ask. Columnas detectadas: {actual_cols}")
+        raise ValueError(f"No se encontraron columnas de Bid/Ask. Columnas detectadas: {list(actual_cols)}")
 
-    lf = lf.rename(rename_map)
+    df = df.rename(columns=rename_map)
 
-    lf = lf.with_columns(
-        pl.col("time").cast(pl.Datetime)
-    ).sort("time")
+    df["time"] = pd.to_datetime(df["time"])
+    df = df.set_index("time")
 
-    df_resampled = (
-        lf.group_by_dynamic("time", every=str(time_rule)+"m")
-        .agg([
-            pl.col("bid").last(),
-            pl.col("ask").last()
-        ])
-        .with_columns(
-            ((pl.col("bid") + pl.col("ask")) / 2).alias("Precio Spot")
-        )
-        .collect()
-    )
+    bid_ohlc = df["bid"].resample(str(time_rule) + "min").ohlc().ffill().bfill()
+    ask_ohlc = df["ask"].resample(str(time_rule) + "min").ohlc().ffill().bfill()
 
-    return df_resampled.to_pandas().set_index("time").ffill().bfill()
+    df_close = pd.DataFrame({
+        "bid": bid_ohlc["close"],
+        "ask": ask_ohlc["close"],
+    })
+
+    df_close["Precio Spot"] = (df_close["bid"] + df_close["ask"]) / 2
+
+    if not include_low:
+        return df_close
+
+    df_low = pd.DataFrame({
+        "bid": bid_ohlc["low"],
+        "ask": ask_ohlc["low"],
+    })
+
+    df_low["Precio Spot"] = (df_low["bid"] + df_low["ask"]) / 2
+
+    df_high = pd.DataFrame({
+        "bid": bid_ohlc["high"],
+        "ask": ask_ohlc["high"],
+    })
+
+    df_high["Precio Spot"] = (df_high["bid"] + df_high["ask"]) / 2
+
+    return df_close, df_low, df_high

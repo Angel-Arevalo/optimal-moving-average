@@ -31,54 +31,42 @@ def backtest(signals_and_prices: pd.DataFrame, ohlc_data: pd.DataFrame, calq_sqn
     return hr, rr, pr, tr, mae_val
 
 
-def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.DataFrame = None, shorts: bool = False) -> pd.Series:
+def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.DataFrame = None, shorts: bool = False) -> pd.DataFrame:
 
     pre_man: pd.Series = man_back.shift(1)
     pre_data: pd.Series = real_data.shift(1)
 
-    # Señales de cruce de moving average
     signal_buy: pd.Series = ((pre_man <= pre_data) & (man_back > real_data)).astype(int)
     signal_sell: pd.Series = ((pre_man > pre_data) & (man_back <= real_data)).astype(int)
 
-    # En el vector de compra o venta aparece un 1 como compra, un -1 como venta y 0 indica no hacer nada
     vector_buy: pd.Series = (signal_buy - signal_sell).fillna(0)
     vector_buy = vector_buy[(vector_buy != 0)]
 
+    entry_sig = -1 if shorts else 1
+    definitive_vector: pd.Series = pd.Series()
+
     if nooh_data is not None:
 
-        fridays_data = real_data[real_data.index.dayofweek == 4]
+        for fecha_domingo, señales_semana in vector_buy.groupby(pd.Grouper(freq='W')):
 
-        last_friday_timestamps = fridays_data.groupby(fridays_data.index.date).apply(lambda x: x.index.max())
+            if señales_semana.empty:
+                continue
 
-        friday: pd.Series = vector_buy[vector_buy.index.dayofweek == 4]
-        friday = friday.groupby(friday.index.date).last()
+            if señales_semana.iloc[0] == -entry_sig:
+                señales_semana = señales_semana.iloc[1:]
 
-        signals: list = []
-        time_sig: list = []
+            if señales_semana.empty:
+                continue
 
-        for date, sig in friday.items():
-            if date in last_friday_timestamps.index:
-                real_timestamp = last_friday_timestamps[date]
+            definitive_vector = pd.concat([definitive_vector, señales_semana])
+            print((fecha_domingo - pd.Timedelta(days=2)).replace(hour=23, minute=50))
+            print(fecha_domingo)
+            if señales_semana.iloc[-1] == entry_sig:
+                fecha_viernes = (fecha_domingo - pd.Timedelta(days=2)).replace(hour=23, minute=50)
 
-                if shorts:
-                    if sig == -1:
-                        signals.append(1)
-                        time_sig.append(real_timestamp)
-                else:
-                    if sig == 1:
-                        signals.append(-1)
-                        time_sig.append(real_timestamp)
+                definitive_vector[fecha_viernes] = -entry_sig
 
-        if len(signals) > 0:
-            friday = pd.Series(signals, index=time_sig)
-
-            vector_buy = pd.concat([vector_buy, friday]).sort_index()
-            vector_buy = vector_buy[~vector_buy.index.duplicated(keep='last')]
-
-            vector_buy = vector_buy[vector_buy != vector_buy.shift(1)]
-
-
-    return vector_buy
+    return definitive_vector
 
 def hit_ratio(trade_resume: pd.Series) -> float:
     if len(trade_resume) == 0:
@@ -118,7 +106,7 @@ def mae(signals_and_prices: pd.DataFrame, ohlc_data: pd.DataFrame, short: bool):
     indices: pd.Series = signals_and_prices.index
     mae_val: float = 0
 
-    # Actualemente se recoore la lista así para tomar 
+    # Actualemente se recoore la lista así para tomar
     # todos los pares de inicio-fin del trade
     for i in range(len(indices)//2):
         precio_entrada: float = signals_and_prices.loc[indices[2*i], "Prices"]

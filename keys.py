@@ -14,6 +14,8 @@ methods: set[str] = avalible_methods
 
 # pre-calculo de ohlc
 pre_ohlc: dict = {}
+low_cache: dict = {}
+high_cache: dict = {}
 
 def fill_ohlc_dict(data, is_bid = False) -> None:
     pre_ohlc.clear()
@@ -23,7 +25,7 @@ def fill_ohlc_dict(data, is_bid = False) -> None:
         data_ = read_data.read_asset(data_)
 
     for i in range(1, candles+1):
-        pre_ohlc[i] = read_data.ohlc_form(data_, i, is_bid)
+        pre_ohlc[i], low_cache[i], high_cache[i] = read_data.ohlc_form(data_, i, is_bid, include_low=True)
 
         if not is_bid:
             pre_ohlc[i] = pre_ohlc[i]["close"]
