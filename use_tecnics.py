@@ -28,9 +28,8 @@ def main(method: str, data: pd.Series, adicional_data: Union[list, int], shorts:
         raise ValueError(f"{method} no implementado")
 
     if isinstance(data, pd.DataFrame) and len(data.columns) > 1:
-        print(ma.index)
-        print([x for x in ma.index if x not in nooh_data.index])
-        filter = nooh_data.loc[ma.index]
+
+        filter = data.loc[ma.index]
 
         precios = np.where(ma == 1, filter['ask'], filter['bid'])
 

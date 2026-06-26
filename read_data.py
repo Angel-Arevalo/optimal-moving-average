@@ -24,12 +24,11 @@ def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, is_bid: bool = Fa
         return asset["Precio Spot"].resample(str(time_rule) + "min").ohlc().ffill()
 
     if isinstance(asset, str):
-        if asset.endswith(".csv"):
-            df = pd.read_csv(asset)
-        else:
-            df = pd.read_parquet(asset)
+        df = pd.read_csv(asset) if asset.endswith(".csv") else pd.read_parquet(asset)
+        df["time"] = pd.to_datetime(df["time"])
+        df = df.set_index("time")
     else:
-        df = asset.reset_index()
+        df = asset.copy()
 
     actual_cols = df.columns
     rename_map = {}
@@ -47,34 +46,35 @@ def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, is_bid: bool = Fa
 
     df = df.rename(columns=rename_map)
 
-    df["time"] = pd.to_datetime(df["time"])
-    df = df.set_index("time")
+    ohlc_bid_total = []
+    ohlc_ask_total = []
 
-    bid_ohlc = df["bid"].resample(str(time_rule) + "min").ohlc().ffill().bfill()
-    ask_ohlc = df["ask"].resample(str(time_rule) + "min").ohlc().ffill().bfill()
+    for fecha_domingo, data_sem in df.groupby(pd.Grouper(freq='W')):
+        fecha_viernes = (fecha_domingo - pd.Timedelta(days=2)).replace(hour=23, minute=59)
+        fecha_lunes   = (fecha_domingo - pd.Timedelta(days=6)).replace(hour=00, minute=00)
 
-    df_close = pd.DataFrame({
-        "bid": bid_ohlc["close"],
-        "ask": ask_ohlc["close"],
-    })
+        ohlc_bid_sem = df.loc[fecha_lunes: fecha_viernes]["bid"].resample(str(time_rule) + "min").ohlc().ffill().bfill()
+        ohlc_ask_sem = df.loc[fecha_lunes: fecha_viernes]["ask"].resample(str(time_rule) + "min").ohlc().ffill().bfill()
 
-    df_close["Precio Spot"] = (df_close["bid"] + df_close["ask"]) / 2
+        ohlc_bid_total.append(ohlc_bid_sem)
+        ohlc_ask_total.append(ohlc_ask_sem)
+
+    bid_total: pd.DataFrame = pd.concat(ohlc_bid_total)
+    ask_total: pd.DataFrame = pd.concat(ohlc_ask_total)
+
+    df_resample = pd.DataFrame({"bid": bid_total["close"],
+                                "ask": ask_total["close"]})
+
+    df_resample["Precio Spot"] = (df_resample["bid"] + df_resample["ask"])/2
 
     if not include_low:
-        return df_close
+        return df_resample
 
-    df_low = pd.DataFrame({
-        "bid": bid_ohlc["low"],
-        "ask": ask_ohlc["low"],
-    })
+    df_low = pd.DataFrame({"bid": bid_total["low"],
+                           "ask": ask_total["low"]})
 
-    df_low["Precio Spot"] = (df_low["bid"] + df_low["ask"]) / 2
+    df_high = pd.DataFrame({"bid": bid_total["high"],
+                            "ask": ask_total["high"]})
 
-    df_high = pd.DataFrame({
-        "bid": bid_ohlc["high"],
-        "ask": ask_ohlc["high"],
-    })
+    return df_resample, df_low, df_high 
 
-    df_high["Precio Spot"] = (df_high["bid"] + df_high["ask"]) / 2
-
-    return df_close, df_low, df_high
