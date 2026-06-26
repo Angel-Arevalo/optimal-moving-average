@@ -86,18 +86,20 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
     return best_result
 
 def f(hr: float, rr: float, pr: float, tr: int, mae: float) -> float:
-    if rr < 1.0 or pr < 1.1:
-        return -10
+    expectancy = hr * rr - (1 - hr)
 
-    loss = 1 - hr
+    if expectancy <= 0 or pr <= 1.0:
+        return -1000
 
-    expecty = hr*rr - loss
+    kelly = expectancy / rr
 
-    expecty = expecty*sqrt(tr)
+    confidence = sqrt(min(tr, 100))
 
-    expecty += log(pr)
+    pf_bonus = log(pr)
 
-    return expecty/mae if mae != 0 else expecty
+    efficiency = expectancy / (expectancy + mae)
+
+    return kelly * confidence * pf_bonus * efficiency
 
 def optimizer(objective: Callable, space: list, engie: str = "fm") -> tuple:
     if engie == "gp":
