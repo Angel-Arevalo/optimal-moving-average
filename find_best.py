@@ -32,6 +32,7 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
     b_trades: int = 0
     b_score: float = 0
     b_mae: float = 0
+    b_mfa: float = 0
 
     space: list = make_search_space()
     for method in keys.methods:
@@ -43,25 +44,22 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
 
             signals_prices: pd.DataFrame = main(method, ohlc, real_param, shorts, data)
 
-            if shorts:
-                hr, rr, pr, tr, mae, sqn = backtest(signals_prices, keys.high_cache[param[0]], True, shorts)
-            else:
-                 hr, rr, pr, tr, mae, sqn = backtest(signals_prices, keys.low_cache[param[0]], True, shorts)
+            hr, rr, pr, tr, mae, mfa, sqn = backtest(signals_prices, keys.high_cache[param[0]], keys.low_cache[param[0]], True, shorts)
 
             if kpis:
-                return -f(hr, rr, pr, tr, mae)
+                return -f(hr, rr, pr, tr, mae, mfa)
 
-            return (sqn, hr, rr, pr, tr, mae)
+            return (sqn, hr, rr, pr, tr, mae, mfa)
 
         result: list = optimizer(objective, space, engie)
 
         if best_result is None:
             best_result = result
-            b_score, b_ht, b_rr, b_pr, b_trades, b_mae = objective(result, False)
+            b_score, b_ht, b_rr, b_pr, b_trades, b_mae, b_mfa = objective(result, False)
             b_met = method
 
         else:
-            score, ht, rr, pr, tr, mae = objective(result, False)
+            score, ht, rr, pr, tr, mae, mfa = objective(result, False)
 
             if b_score < score:
                 b_score = score
@@ -72,6 +70,7 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
                 best_result = result
                 b_met = method
                 b_mae = mae
+                b_mfa = mfa
 
     if verbose:
         #print(f'Resultado obtenido entrenando desde {data.index[0].strftime("%Y-%m-%d")} hasta {data.index[-1].strftime("%Y-%m-%d")}')
@@ -79,27 +78,52 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
         print(f"\nhit ratio: {b_ht}\nrisk reward: {b_rr}\nprofit factor: {b_pr}\ntrades: {b_trades}")
         print(f"Resultado de estabilidad {b_score}")
         print(f"Mae {b_mae}")
+        print(f"Mfa {b_mfa}")
         print(f"Operando {"cortos" if shorts else "largos"}" )
+
 
     best_result.insert(0, b_met)
 
     return best_result
 
-def f(hr: float, rr: float, pr: float, tr: int, mae: float) -> float:
-    expectancy = hr * rr - (1 - hr)
+def f(hr: float, rr: float, pr: float, tr: int, mae: float, mfa: float) -> float:
 
-    if expectancy <= 0 or pr <= 1.0:
-        return -1000
 
-    kelly = expectancy / rr
+    from numpy import exp, tanh, array, sum as np_sum, clip
 
-    confidence = sqrt(min(tr, 100))
+    hr_norm = clip(hr_norm, 0.0, 1.0)
+    s1 = hr_norm
 
-    pf_bonus = log(pr)
+    pf_clipped = clip(pr, 0.0, 10.0)
+    alpha = 2.5
+    pf_0 = 1.5
+    s2 = 1.0 / (1.0 + exp(-alpha * (pf_clipped - pf_0)))
 
-    efficiency = expectancy / (expectancy + mae)
+    rr_clipped = clip(rr, 0.0, 10.0)
+    beta = 0.5
+    s3 = tanh(beta * rr_clipped)
 
-    return kelly * confidence * pf_bonus * efficiency
+    s4 = mfa / (mfa + mae + 1e-6)
+
+    gamma_mfe = 0.5
+    s5 = 1.0 - exp(-gamma_mfe * mfa)
+
+    lambda_mae = 1.0
+    s6 = exp(-lambda_mae * mae)
+
+    sub_scores = array([s1, s2, s3, s4, s5, s6])
+
+    weights = array([0.25, 0.20, 0.20, 0.15, 0.10, 0.10])
+
+    mean_weighted = np_sum(sub_scores * weights)
+
+    variance_weighted = np_sum(weights * (sub_scores - mean_weighted) ** 2)
+
+    delta_penalty = 1.5
+    score_final = mean_weighted - (delta_penalty * variance_weighted)
+
+    return float(max(score_final, 0.0))
+
 
 def optimizer(objective: Callable, space: list, engie: str = "fm") -> tuple:
     if engie == "gp":
