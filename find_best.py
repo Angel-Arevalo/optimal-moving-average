@@ -15,7 +15,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-def opti_main(data: Union[pd.DataFrame, str], verbose: bool = True, engie: str = "fm", shorts: bool = False) -> list:
+def opti_main(data: Union[pd.DataFrame, str], verbose: bool = True, engie: str = "gp", shorts: bool = False) -> list:
 
     keys.pre_ohlc = {}
     keys.fill_ohlc_dict(data)
@@ -96,7 +96,7 @@ def f(hr: float, rr: float, pr: float, tr: int, mae: float) -> float:
 
     return kelly * confidence * pf_bonus * efficiency
 
-def optimizer(objective: Callable, space: list, engie: str = "fm") -> tuple:
+def optimizer(objective: Callable, space: list, engie: str = "gp") -> tuple:
     if engie == "gp":
         result = gp_minimize(
                     func=objective,

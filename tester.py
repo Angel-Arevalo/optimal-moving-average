@@ -31,7 +31,7 @@ def backtest(signals_and_prices: pd.DataFrame, ohlc_data: pd.DataFrame, calq_sqn
     return hr, rr, pr, tr, mae_val
 
 
-def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.DataFrame = None, shorts: bool = False) -> pd.DataFrame:
+def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.DataFrame, shorts: bool = False) -> pd.Series:
 
     pre_man: pd.Series = man_back.shift(1)
     pre_data: pd.Series = real_data.shift(1)
@@ -43,34 +43,43 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.Dat
     vector_buy = vector_buy[(vector_buy != 0)]
 
     entry_sig = -1 if shorts else 1
-    definitive_vector: pd.Series = pd.Series()
+    definitive_vector: list[pd.Series] = []
 
-    if nooh_data is not None:
+    if nooh_data is None:
+        raise ValueError("No se puede hacer sin la data original")
 
-        for fecha_domingo, señales_semana in vector_buy.groupby(pd.Grouper(freq='W')):
+    for fecha_domingo, señales_semana in vector_buy.groupby(pd.Grouper(freq='W')):
 
-            if señales_semana.empty:
-                continue
+        if señales_semana.empty:
+            continue
 
-            if señales_semana.iloc[0] == -entry_sig:
-                señales_semana = señales_semana.iloc[1:]
+        if señales_semana.iloc[0] == -entry_sig:
+            señales_semana = señales_semana.iloc[1:]
 
-            if señales_semana.empty:
-                continue
 
-            definitive_vector = pd.concat([definitive_vector, señales_semana])
+        if señales_semana.empty:
+            continue
 
-            if señales_semana.iloc[-1] == entry_sig:
-                fecha_viernes = fecha_domingo - pd.Timedelta(days=2)
+        if señales_semana.iloc[-1] == entry_sig:
+            fecha_viernes = fecha_domingo - pd.Timedelta(days=2)
 
-                velas_viernes = real_data[real_data.index.normalize() == fecha_viernes.normalize()]
+            velas_viernes = real_data[real_data.index.normalize() == fecha_viernes.normalize()]
 
-                if not velas_viernes.empty:
-                    ultimo_real = velas_viernes.index[-1]
-                    if ultimo_real not in definitive_vector.index:
-                        definitive_vector[ultimo_real] = -entry_sig
+            if not velas_viernes.empty:
+                ultimo_real = velas_viernes.index[-1]
+                if ultimo_real == señales_semana.index[-1]:
+                    señales_semana = señales_semana.iloc[:-1]
 
-    return definitive_vector
+                elif ultimo_real not in señales_semana.index:
+                    señales_semana.loc[ultimo_real] = -entry_sig
+
+        if not señales_semana.empty:
+            definitive_vector.append(señales_semana)
+
+    if not definitive_vector:
+        return pd.Series(dtype=int)
+
+    return pd.concat(definitive_vector)
 
 def hit_ratio(trade_resume: pd.Series) -> float:
     if len(trade_resume) == 0:
