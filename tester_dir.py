@@ -30,4 +30,4 @@ def sqn(rev: pd.DataFrame, tend: pd.DataFrame, short: bool) -> float:
     if des == 0:
         return 0
 
-    return np.sqrt(np.min(len(trades), 100)) * mu/des
+    return np.sqrt(min(len(trades), 100)) * mu/des

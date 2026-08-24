@@ -50,14 +50,14 @@ def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, temporality: str 
         fecha_viernes = (fecha_domingo - pd.Timedelta(days=2)).replace(hour=23, minute=59)
         fecha_lunes   = (fecha_domingo - pd.Timedelta(days=6)).replace(hour=00, minute=00)
 
-        ohlc_bid_sem = df.loc[fecha_lunes: fecha_viernes]["bid"].resample(str(time_rule) + "min").ohlc().ffill().bfill()
-        ohlc_ask_sem = df.loc[fecha_lunes: fecha_viernes]["ask"].resample(str(time_rule) + "min").ohlc().ffill().bfill()
+        ohlc_bid_sem = df.loc[fecha_lunes: fecha_viernes]["bid"].resample(str(time_rule) + "min").ohlc() 
+        ohlc_ask_sem = df.loc[fecha_lunes: fecha_viernes]["ask"].resample(str(time_rule) + "min").ohlc()
 
         ohlc_bid_total.append(ohlc_bid_sem)
         ohlc_ask_total.append(ohlc_ask_sem)
 
-    bid_ohlc: pd.DataFrame = pd.concat(ohlc_bid_total)
-    ask_ohlc: pd.DataFrame = pd.concat(ohlc_ask_total)
+    bid_ohlc: pd.DataFrame = pd.concat(ohlc_bid_total).dropna()
+    ask_ohlc: pd.DataFrame = pd.concat(ohlc_ask_total).dropna()
 
     mid_ohlc = pd.DataFrame({"open": (bid_ohlc["open"] + ask_ohlc["open"])/2,
                               "high": (bid_ohlc["high"] + ask_ohlc["high"])/2,

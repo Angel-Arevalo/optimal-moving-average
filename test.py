@@ -6,6 +6,7 @@ import keys
 import find_best
 import direction_methods
 import use_tecnics
+import tester_dir
 
 mt5.initialize()
 
@@ -31,13 +32,15 @@ df = df.rename(columns={"close": "bid"})
 df["ask"] = df["bid"] + (df["spread"] * point)
 
 df_result = df[["time", "bid", "ask"]].set_index("time")
-
+print(df_result.loc[datetime(2026, 6, 5, 0, 45): datetime(2026, 6, 5, 1, 5)])
+print(df_result.loc[datetime(2026, 8, 7, 16, 30): datetime(2026, 8, 7, 16, 50)])
 keys.fill_ohlc_dict(df_result)
 
 _, _, ohlc = read_data.ohlc_form(df_result, 5)
 
 t = use_tecnics.main("SMA", ohlc["close"], 10, True, df_result)
 
-kef = direction_methods.DIR_METHODS["KEF"](63, 10)
+kef = direction_methods.DIR_METHODS["KEF"]({"candle": 63, "window": 10, "follow_tend": .5})
 
-print(direction_methods._split_signals_and_change(t, kef, True))
+t, p = direction_methods._split_signals_and_change(t, kef, True, df_result)
+print(tester_dir.sqn(t, p, True), tester_dir.fsr(t, p, True))
