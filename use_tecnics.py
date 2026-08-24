@@ -1,7 +1,7 @@
 import talib
 import pandas as pd
 import numpy as np
-from typing import Dict, Callable, Union
+from typing import Dict, Callable
 from tester import get_vector_buys
 
 avalible_methods: set = {"SMA", "EMA", "WMA", "DEMA", "TEMA", "TRIMA", "KAMA", "T3", "MIDPOINT"}
@@ -9,20 +9,15 @@ avalible_methods: set = {"SMA", "EMA", "WMA", "DEMA", "TEMA", "TRIMA", "KAMA", "
 # actualmente este método va a retornar el vector de compras y ventas
 # De ahora en adelanta se asume que data ya es el vector de información
 # final
-def main(method: str, data: pd.Series, adicional_data: Union[list, int], shorts: bool = False, nooh_data: pd.DataFrame = None) -> pd.DataFrame:
+def main(method: str, data: pd.Series, lookback: int, shorts: bool = False, nooh_data: pd.DataFrame = None) -> pd.DataFrame:
+
     if method not in avalible_methods:
         raise ValueError("Not avalible method")
 
     if method in avalible_methods:
-        if isinstance(adicional_data, list):
-            adicional_data = adicional_data[0]
 
-        if isinstance(data, pd.DataFrame) and len(data.columns) > 1:
-            ma: pd.Series = SIMPLE_METHODS[method](data["Precio Spot"], adicional_data)
-            ma = get_vector_buys(ma, data["Precio Spot"], nooh_data, shorts)
-        else:
-            ma: pd.Series = SIMPLE_METHODS[method](data, adicional_data)
-            ma = get_vector_buys(ma, data, nooh_data, shorts)
+        ma: pd.Series = SIMPLE_METHODS[method](data, lookback)
+        ma = get_vector_buys(ma, data, nooh_data, shorts)
 
     else:
         raise ValueError(f"{method} no implementado")

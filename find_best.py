@@ -15,13 +15,10 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: bool = True, engie: str = "fm", shorts: bool = False) -> list:
-
-    if not is_bid and isinstance(data, str):
-        data = read_asset(data)
+def opti_main(data: Union[pd.DataFrame, str], verbose: bool = True, engie: str = "fm", shorts: bool = False) -> list:
 
     keys.pre_ohlc = {}
-    keys.fill_ohlc_dict(data, is_bid)
+    keys.fill_ohlc_dict(data)
 
 
     best_result: list = None
@@ -37,16 +34,14 @@ def opti_main(data: Union[pd.DataFrame, str], is_bid: bool = False, verbose: boo
     for method in keys.methods:
 
         def objective(param: list, kpis: bool = True) -> float:
-            ohlc: pd.DataFrame = keys.pre_ohlc[param[0]]
+            ohlc: pd.DataFrame = keys.mid_cache[param[0]]["close"]
 
-            real_param = param[1]
-
-            signals_prices: pd.DataFrame = main(method, ohlc, real_param, shorts, data)
+            signals_prices: pd.DataFrame = main(method, ohlc, param[1], shorts, data)
 
             if shorts:
-                hr, rr, pr, tr, mae, sqn = backtest(signals_prices, keys.high_cache[param[0]], True, shorts)
+                hr, rr, pr, tr, mae, sqn = backtest(signals_prices, keys.bid_cache[param[0]]["high"], True, shorts)
             else:
-                 hr, rr, pr, tr, mae, sqn = backtest(signals_prices, keys.low_cache[param[0]], True, shorts)
+                 hr, rr, pr, tr, mae, sqn = backtest(signals_prices, keys.ask_cache[param[0]]["low"], True, shorts)
 
             if kpis:
                 return -f(hr, rr, pr, tr, mae)
@@ -135,17 +130,23 @@ def optimizer(objective: Callable, space: list, engie: str = "fm") -> tuple:
 def make_search_space() -> list:
     search_space: list = []
 
-    if keys.lookbacks <= 1:
-        raise ValueError("Invalido espacio de búsqueda para lookback")
+    if keys.lookbacks_min < 2:
+        raise ValueError("Espacio pequeño de vista hacia atras")
 
-    if keys.candles <= 0:
-        raise ValueError("Inválido espacio de búsqueda para vela")
+    if keys.lookbacks < keys.lookbacks_min:
+        raise ValueError("Espacio de búsqueda inválido para lookback (min > max)")
 
-    if keys.candles != 1:
-        search_space.append(Integer(1, keys.candles, name="candle"))
+    if keys.candles < keys.candles_min:
+        raise ValueError("Espacio de búsqueda inválido para vela (min > max)")
+
+    if keys.candles_min == keys.candles:
+        search_space.append(Categorical([keys.candles_min], name="candle"))
     else:
-        search_space.append(Categorical([1], name="candle"))
+        search_space.append(Integer(keys.candles_min, keys.candles, name="candle"))
 
-    search_space.append(Integer(2, keys.lookbacks, name="lookback"))
+    if keys.lookbacks_min == keys.lookbacks:
+        search_space.append(Categorical([keys.lookbacks_min], name="lookback"))
+    else:
+        search_space.append(Integer(keys.lookbacks_min, keys.lookbacks, name="lookback"))
 
     return search_space

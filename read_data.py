@@ -1,6 +1,5 @@
 import pandas as pd
 from typing import Union
-import polars as pl
 
 # Se lee la info para tener un DataFrame con la forma time | spot
 def read_asset(asset_name: str) -> pd.DataFrame:
@@ -16,12 +15,10 @@ def read_asset(asset_name: str) -> pd.DataFrame:
 # Se organiza la info en el formato ohlc, 
 #                                   open-high-low-close
 #
-def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, is_bid: bool = False, include_low: bool = False) -> pd.DataFrame:
-
-    if not is_bid:
-        if isinstance(asset, str):
-            return read_asset(asset)["Precio Spot"].resample(str(time_rule)+"min").ohlc().ffill().bfill()
-        return asset["Precio Spot"].resample(str(time_rule) + "min").ohlc().ffill()
+def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, temporality: str = "min") -> pd.DataFrame:
+ 
+    if temporality not in ["min", "h", "d"]:
+        raise ValueError("Temporality not avalible, only acepted min, h, d")
 
     if isinstance(asset, str):
         df = pd.read_csv(asset) if asset.endswith(".csv") else pd.read_parquet(asset)
@@ -59,22 +56,12 @@ def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, is_bid: bool = Fa
         ohlc_bid_total.append(ohlc_bid_sem)
         ohlc_ask_total.append(ohlc_ask_sem)
 
-    bid_total: pd.DataFrame = pd.concat(ohlc_bid_total)
-    ask_total: pd.DataFrame = pd.concat(ohlc_ask_total)
+    bid_ohlc: pd.DataFrame = pd.concat(ohlc_bid_total)
+    ask_ohlc: pd.DataFrame = pd.concat(ohlc_ask_total)
 
-    df_resample = pd.DataFrame({"bid": bid_total["close"],
-                                "ask": ask_total["close"]})
+    mid_ohlc = pd.DataFrame({"open": (bid_ohlc["open"] + ask_ohlc["open"])/2,
+                              "high": (bid_ohlc["high"] + ask_ohlc["high"])/2,
+                              "low": (bid_ohlc["low"] + ask_ohlc["low"])/2,
+                              "close": (bid_ohlc["close"] + ask_ohlc["close"])/2})
 
-    df_resample["Precio Spot"] = (df_resample["bid"] + df_resample["ask"])/2
-
-    if not include_low:
-        return df_resample
-
-    df_low = pd.DataFrame({"bid": bid_total["low"],
-                           "ask": ask_total["low"]})
-
-    df_high = pd.DataFrame({"bid": bid_total["high"],
-                            "ask": ask_total["high"]})
-
-    return df_resample, df_low, df_high 
-
+    return bid_ohlc, ask_ohlc, mid_ohlc

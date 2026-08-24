@@ -116,7 +116,7 @@ def mae(signals_and_prices: pd.DataFrame, ohlc_data: pd.DataFrame, short: bool):
         precio_entrada: float = signals_and_prices.loc[indices[2*i], "Prices"]
         periodo: pd.Series = ohlc_data.loc[indices[2*i]: indices[2*i +1]]
 
-        peak_val: float = periodo["bid"].max() if short else periodo["ask"].min()
+        peak_val: float = periodo.max() if short else periodo.min()
  
         # siempre debe calcularse el precio de entrada menos el valor al
         # que se necesita, pero hay que tener en cuenta el signo

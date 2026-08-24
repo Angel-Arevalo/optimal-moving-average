@@ -1,6 +1,9 @@
 from use_tecnics import avalible_methods
 import read_data
 from typing import Union
+#Temporalidad de particionado
+temp: str = "min"
+
 # llaves para las llamadas del optimizador
 calls: int = 60
 initial_points: int = 20
@@ -8,24 +11,23 @@ initial_points: int = 20
 
 # llaves (básicas) para el espacio de búsqueda
 lookbacks: int = 110
+lookbacks_min: int = 2
+
 candles: int = 100
-n_rsis: int = 50
+candles_min: int = 1
+
 methods: set[str] = avalible_methods
 
 # pre-calculo de ohlc
-pre_ohlc: dict = {}
-low_cache: dict = {}
-high_cache: dict = {}
+bid_cache: dict = {}
+ask_cache: dict = {}
+mid_cache: dict = {}
 
-def fill_ohlc_dict(data, is_bid = False) -> None:
-    pre_ohlc.clear()
+def fill_ohlc_dict(data) -> None:
+    bid_cache.clear()
+    ask_cache.clear()
+    mid_cache.clear()
     data_ = data.copy()
 
-    if not is_bid and isinstance(data_, str):
-        data_ = read_data.read_asset(data_)
-
     for i in range(1, candles+1):
-        pre_ohlc[i], low_cache[i], high_cache[i] = read_data.ohlc_form(data_, i, is_bid, include_low=True)
-
-        if not is_bid:
-            pre_ohlc[i] = pre_ohlc[i]["close"]
+        bid_cache[i], ask_cache[i], mid_cache[i] = read_data.ohlc_form(data_, i, temp)
