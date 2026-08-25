@@ -7,6 +7,7 @@ import find_best
 import direction_methods
 import use_tecnics
 import tester_dir
+import tester 
 
 mt5.initialize()
 
@@ -42,4 +43,4 @@ t = use_tecnics.main("SMA", ohlc["close"], 10, True, df_result)
 kef = direction_methods.DIR_METHODS["KEF"]({"candle": 63, "window": 10, "follow_tend": .5})
 
 q, p = direction_methods._split_signals_and_change(t, kef, True, df_result)
-print(tester_dir.sqn(q, p, True), tester_dir.fsr(q, p, True), tester_dir.DEF(q, p, t, True))
+print(tester_dir.sqn(q, p, True), tester_dir.fsr(q, p, True), tester_dir.DEF(q, p, t, True), tester_dir.profit_factor(q, p, True), tester.backtest(t, keys.mid_cache[1]["close"], True, True))

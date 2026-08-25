@@ -4,12 +4,19 @@ from skopt.space import Real, Integer, Categorical
 
 import numpy as np
 import keys
+from tester_dir import fsr, sqn, msr, DEF, profit_factor
 
-def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, params_method: dict, short: bool) -> float:
+def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, params_method: dict, short: bool) -> Tuple[float, float, float, float, float]:
     cond_vector: pd.Series = DIR_METHODS[params_method["name"]](params_method)
 
     rever_tr, trend_tr = _split_signals_and_change(signals_and_prices, cond_vector, short)
-    return (None, None)
+
+    fsr = fsr(rever_tr, trend_tr, short)
+    sqn = sqn(rever_tr, trend_tr, short)
+    msr = msr(rever_tr, trend_tr)
+    def_v = DEF(rever_tr, trend_tr, signals_and_prices, short)
+    pr  = profit_factor(rever_tr, trend_tr, short)
+    return fsr, sqn, msr, def_v, pr
 
 def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond: pd.Series, short: bool, data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     entry_sig: int = -1 if short else 1
@@ -48,7 +55,8 @@ def _dir_methods(name: str) -> Callable[[Callable[[dict], pd.Series]], Callable[
 
     return decorador
 
-dir_methods: set[str] = DIR_METHODS
+dir_methods: list[str] = list(DIR_METHODS.keys())
+dir_methods.append("")
 
 @_dir_methods("KEF")
 def kaufman(params: dict) -> pd.Series:

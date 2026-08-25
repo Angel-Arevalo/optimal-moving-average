@@ -1,0 +1,131 @@
+from typing import List, Tuple
+import numpy as np
+import optuna
+import pandas as pd
+
+from direction_methods import dir_main, dir_methods
+from find_best import f
+import keys
+
+from tester import backtest
+from use_tecnics import main
+
+
+def calculate_directional_score(val: float, fsr: float, def_v: float, msr: float) -> float:
+    s_fsr = 1.0 / (1.0 + np.exp(-3.0 * (fsr - 1.0)))
+
+    s_def = 1.0 / (1.0 + np.exp(-3.0 * (def_v - 1.0)))
+
+    s_dir = 1.0 + 0.4 * (s_fsr - 0.5) + 0.3 * (s_def - 0.5)
+
+    msr_safe = max(msr, 1e-4)
+    msr_penalty = 0.5 * max(0.0, np.abs(np.log(msr_safe)) - np.log(10.0)) ** 2
+
+    final_score = (val * s_dir) - msr_penalty
+    return float(final_score)
+
+
+def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_trials: int = 100) -> optuna.Study:
+    keys.bid_cache = {}
+    keys.ask_cache = {}
+    keys.mid_cache = {}
+
+    keys.fill_ohlc_dict(asset)
+
+    def objective(trial: optuna.Trial) -> float:
+        ma_method = trial.suggest_categorical(
+            "ma_method", list(keys.methods)
+        )
+        ma_candle = trial.suggest_int(
+            "ma_candle", keys.candles_min, keys.candles
+        )
+        ma_lookback = trial.suggest_int(
+            "ma_lookback", keys.lookbacks_min, keys.lookbacks
+        )
+
+        ohlc: pd.DataFrame = keys.mid_cache[ma_candle]["close"]
+        signals_prices: pd.DataFrame = main(
+            ma_method, ohlc, ma_lookback, shorts, asset
+        )
+
+        if shorts:
+            bid_ask_data = keys.bid_cache[ma_candle]["high"]
+        else:
+            bid_ask_data = keys.ask_cache[ma_candle]["low"]
+
+        hr, rr, pr, tr, mae = backtest(
+            signals_prices, bid_ask_data, False, shorts
+        )
+
+        val: float = f(hr, rr, pr, tr, mae)
+
+        dir_method = trial.suggest_categorical("dir_method", dir_methods)
+
+        if dir_method == "":
+            return -val
+
+        dir_candle = trial.suggest_int("dir_candle", 1, 100)
+        dir_window = trial.suggest_int("dir_window", 2, 100)
+
+        params = {
+            "name": dir_method,
+            "candle": dir_candle,
+            "window": dir_window,
+        }
+
+        if dir_method == "KEF":
+            params["follow_tend"] = trial.suggest_float("follow_tend", 0.1, 1.0)
+        elif dir_method == "HURST":
+            params["follow_tend"] = trial.suggest_float("follow_tend", 0.5, 1.0)
+        elif dir_method == "LO_MACKINLAY":
+            params["k"] = trial.suggest_int("k", 2, 10)
+            params["follow_tend"] = trial.suggest_float(
+                "follow_tend", 0.5, 3.0
+            )
+        elif dir_method == "ADX":
+            params["follow_tend"] = trial.suggest_float(
+                "follow_tend", 10.0, 40.0
+            )
+        elif dir_method == "VOL_RATIO":
+            params["follow_tend"] = trial.suggest_float(
+                "follow_tend", 0.5, 3.0
+            )
+        elif dir_method == "SHANNON":
+            params["bins"] = trial.suggest_int("bins", 5, 20)
+            params["follow_tend"] = trial.suggest_float(
+                "follow_tend", 0.3, 1.0
+            )
+        elif dir_method == "ATR_EXPANSION":
+            params["lookback_ma"] = trial.suggest_int("lookback_ma", 20, 100)
+            params["follow_tend"] = trial.suggest_float(
+                "follow_tend", 1.0, 3.0
+            )
+        elif dir_method == "KELTNER_BREAKOUT":
+            params["mult"] = trial.suggest_float("mult", 1.0, 4.0)
+
+        try:
+            fsr, sqn, msr, def_v, pr_dir = dir_main(
+                signals_prices, asset, params, shorts
+            )
+        except Exception:
+            return 1000.0
+
+        if fsr is None or pr < pr_dir or val <= 0:
+            return 1000.0
+
+        final_score = calculate_directional_score(val, fsr, def_v, msr)
+
+        return -final_score
+
+    study = optuna.create_study(
+        direction="minimize",
+        sampler=optuna.samplers.TPESampler(),
+    )
+
+    study.optimize(objective, n_trials=n_trials)
+
+    if verbose:
+        print("Mejores Hiperparámetros:", study.best_params)
+        print("Mejor Score Escalado:", -study.best_value)
+
+    return study

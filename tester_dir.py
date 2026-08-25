@@ -63,7 +63,7 @@ def DEF(rev: pd.DataFrame, tend: pd.DataFrame, org_df: pd.DataFrame, short: bool
     profit_reduction = (prev_profit - new_profit) / prev_profit if prev_profit != 0 else 0.0
 
     if profit_reduction == 0:
-        return float("inf") if dd_reduction > 0 else 0.0
+        return 0
 
     return dd_reduction / profit_reduction
 
@@ -76,3 +76,24 @@ def max_drawdown(trade_resume: np.ndarray) -> float:
 
 def profit(trade_resume: np.ndarray) -> float:
     return np.sum(trade_resume)
+
+def profit_factor(rev: pd.DataFrame, tend: pd.DataFrame, short: bool) -> float:
+    rev_resume: np.array = rev["Prices"].diff().fillna(0)
+    tend_resume: np.array = tend["Prices"].diff().fillna(0)
+
+    if short:
+        rev_resume = -rev_resume[rev["Signals"] == 1].to_numpy()
+        tend_resume = tend_resume[tend["Signals"] == -1].to_numpy()
+    else:
+        rev_resume = rev_resume[rev["Signals"] == -1].to_numpy()
+        tend_resume = -tend_resume[tend["Signals"] == 1].to_numpy()
+
+    trades = np.concatenate([rev_resume, tend_resume])
+    win: pd.Series = trades[trades > 0]
+    loss: pd.Series = trades[trades <= 0]
+
+    if len(win) == 0 or len(loss) == 0 or np.sum(loss) == 0:
+        return 0.0
+
+    return win.sum() / (-loss.sum())
+
