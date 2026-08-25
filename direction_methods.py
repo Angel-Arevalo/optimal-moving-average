@@ -4,19 +4,19 @@ from skopt.space import Real, Integer, Categorical
 
 import numpy as np
 import keys
-from tester_dir import fsr, sqn, msr, DEF, profit_factor
+from tester_dir import hit_ratio, risk_reward, profit_factor, mae
 
-def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, params_method: dict, short: bool) -> Tuple[float, float, float, float, float]:
+def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: int, params_method: dict, short: bool) -> Tuple[float, float, float, float, float]:
     cond_vector: pd.Series = DIR_METHODS[params_method["name"]](params_method)
 
-    rever_tr, trend_tr = _split_signals_and_change(signals_and_prices, cond_vector, short)
+    rever_tr, trend_tr = _split_signals_and_change(signals_and_prices, cond_vector, short, data)
 
-    fsr = fsr(rever_tr, trend_tr, short)
-    sqn = sqn(rever_tr, trend_tr, short)
-    msr = msr(rever_tr, trend_tr)
-    def_v = DEF(rever_tr, trend_tr, signals_and_prices, short)
-    pr  = profit_factor(rever_tr, trend_tr, short)
-    return fsr, sqn, msr, def_v, pr
+    hr = hit_ratio(rever_tr, trend_tr, short)
+    rr = risk_reward(rever_tr, trend_tr, short)
+    pr = profit_factor(rever_tr, trend_tr, short)
+    tr = len(rever_tr)//2 + len(trend_tr)//2
+    mae_val = mae(rever_tr, trend_tr, short, candle_ma)
+    return hr, rr, pr, tr, mae_val
 
 def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond: pd.Series, short: bool, data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     entry_sig: int = -1 if short else 1
@@ -54,9 +54,6 @@ def _dir_methods(name: str) -> Callable[[Callable[[dict], pd.Series]], Callable[
         return func
 
     return decorador
-
-dir_methods: list[str] = list(DIR_METHODS.keys())
-dir_methods.append("")
 
 @_dir_methods("KEF")
 def kaufman(params: dict) -> pd.Series:

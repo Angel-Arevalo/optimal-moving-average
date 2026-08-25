@@ -3,13 +3,23 @@ import numpy as np
 import optuna
 import pandas as pd
 
-from direction_methods import dir_main, dir_methods
+from direction_methods import dir_main
 from find_best import f
 import keys
 
 from tester import backtest
 from use_tecnics import main
 
+dir_methods = [
+    "KEF",
+    "HURST",
+    "LO_MACKINLAY",
+    "ADX",
+    "VOL_RATIO",
+    "SHANNON",
+    "ATR_EXPANSION",
+    "KELTNER_BREAKOUT",
+]
 
 def calculate_directional_score(val: float, fsr: float, def_v: float, msr: float) -> float:
     s_fsr = 1.0 / (1.0 + np.exp(-3.0 * (fsr - 1.0)))
@@ -103,19 +113,19 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         elif dir_method == "KELTNER_BREAKOUT":
             params["mult"] = trial.suggest_float("mult", 1.0, 4.0)
 
-        try:
-            fsr, sqn, msr, def_v, pr_dir = dir_main(
-                signals_prices, asset, params, shorts
-            )
-        except Exception:
-            return 1000.0
+        # Aquí asumo que ya modificaste dir_main para que retorne hr, rr, pr, tr, mae
+        hr_dir, rr_dir, pr_dir, tr_dir, mae_dir = dir_main(
+            signals_prices, asset, ma_candle, params, shorts
+        )
 
-        if fsr is None or pr < pr_dir or val <= 0:
-            return 1000.0
+        # Guardamos los KPIs en el trial actual para poder recuperarlos después
+        trial.set_user_attr("hr", hr_dir)
+        trial.set_user_attr("rr", rr_dir)
+        trial.set_user_attr("pr", pr_dir)
+        trial.set_user_attr("tr", tr_dir)
+        trial.set_user_attr("mae", mae_dir)
 
-        final_score = calculate_directional_score(val, fsr, def_v, msr)
-
-        return -final_score
+        return -f(hr_dir, rr_dir, pr_dir, tr_dir, mae_dir)
 
     study = optuna.create_study(
         direction="minimize",
@@ -125,7 +135,14 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
     study.optimize(objective, n_trials=n_trials)
 
     if verbose:
-        print("Mejores Hiperparámetros:", study.best_params)
-        print("Mejor Score Escalado:", -study.best_value)
+        best_trial = study.best_trial
+        print(f"Método de Dirección: {best_trial.params.get('dir_method')}, Datos optimizados {best_trial.params}")
+        print(f"\nhit ratio: {best_trial.user_attrs.get('hr')}")
+        print(f"risk reward: {best_trial.user_attrs.get('rr')}")
+        print(f"profit factor: {best_trial.user_attrs.get('pr')}")
+        print(f"trades: {best_trial.user_attrs.get('tr')}")
+        print(f"Resultado de estabilidad {-best_trial.value}")
+        print(f"Mae {best_trial.user_attrs.get('mae')}")
+        print(f"Operando {'cortos' if shorts else 'largos'}")
 
     return study

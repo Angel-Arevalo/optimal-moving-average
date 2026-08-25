@@ -1,6 +1,9 @@
 import pandas as pd
 import numpy as np
 
+from tester import mae as mae_t
+import keys
+
 def fsr(rev: pd.DataFrame, tend: pd.DataFrame, short: bool) -> float:
     trade_resume: pd.Series = tend["Prices"].diff().fillna(0)
 
@@ -77,6 +80,42 @@ def max_drawdown(trade_resume: np.ndarray) -> float:
 def profit(trade_resume: np.ndarray) -> float:
     return np.sum(trade_resume)
 
+def hit_ratio(rev: pd.DataFrame, tend: pd.DataFrame, short: bool) -> float:
+    rev_resume: np.array = rev["Prices"].diff().fillna(0)
+    tend_resume: np.array = tend["Prices"].diff().fillna(0)
+
+    if short:
+        rev_resume = -rev_resume[rev["Signals"] == 1].to_numpy()
+        tend_resume = tend_resume[tend["Signals"] == -1].to_numpy()
+    else:
+        rev_resume = rev_resume[rev["Signals"] == -1].to_numpy()
+        tend_resume = -tend_resume[tend["Signals"] == 1].to_numpy()
+
+    trades = np.concatenate([rev_resume, tend_resume])
+    win: pd.Series = trades[trades > 0]
+
+    return len(win)/len(trades)
+
+def risk_reward(rev: pd.DataFrame, tend: pd.DataFrame, short: bool) -> float:
+    rev_resume: np.array = rev["Prices"].diff().fillna(0)
+    tend_resume: np.array = tend["Prices"].diff().fillna(0)
+
+    if short:
+        rev_resume = -rev_resume[rev["Signals"] == 1].to_numpy()
+        tend_resume = tend_resume[tend["Signals"] == -1].to_numpy()
+    else:
+        rev_resume = rev_resume[rev["Signals"] == -1].to_numpy()
+        tend_resume = -tend_resume[tend["Signals"] == 1].to_numpy()
+
+    trades = np.concatenate([rev_resume, tend_resume])
+    win: pd.Series = trades[trades > 0]
+    loss: pd.Series = trades[trades <= 0]
+
+    if len(win) == 0 or len(loss) == 0 or np.sum(loss) == 0:
+        return 0.0
+
+    return win.mean() / (-loss.mean())
+
 def profit_factor(rev: pd.DataFrame, tend: pd.DataFrame, short: bool) -> float:
     rev_resume: np.array = rev["Prices"].diff().fillna(0)
     tend_resume: np.array = tend["Prices"].diff().fillna(0)
@@ -97,3 +136,15 @@ def profit_factor(rev: pd.DataFrame, tend: pd.DataFrame, short: bool) -> float:
 
     return win.sum() / (-loss.sum())
 
+def mae(rev: pd.DataFrame, tend: pd.DataFrame, short: bool, candle: int) -> float:
+    if short:
+        rev_ohlc: float = mae_t(rev, keys.bid_cache[candle]["high"], short)
+        tend_ohlc: float = mae_t(tend, keys.ask_cache[candle]["low"], not short)
+    else:
+        rev_ohlc: float = mae_t(rev, keys.ask_cache[candle]["low"], short)
+        tend_ohlc: float = mae_t(tend, keys.bid_cache[candle]["high"], not short)
+
+    if len(rev) == 0 and len(tend) == 0:
+        return 0
+
+    return (rev_ohlc + tend_ohlc)/(len(rev)//2 + len(tend)//2)
