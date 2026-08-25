@@ -21,6 +21,8 @@ dir_methods = [
     "KELTNER_BREAKOUT",
 ]
 
+optuna.logging.set_verbosity(optuna.logging.WARNING)
+
 def calculate_directional_score(val: float, fsr: float, def_v: float, msr: float) -> float:
     s_fsr = 1.0 / (1.0 + np.exp(-3.0 * (fsr - 1.0)))
 
@@ -35,7 +37,7 @@ def calculate_directional_score(val: float, fsr: float, def_v: float, msr: float
     return float(final_score)
 
 
-def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_trials: int = 100) -> optuna.Study:
+def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_trials: int = 100) -> Tuple:
     keys.bid_cache = {}
     keys.ask_cache = {}
     keys.mid_cache = {}
@@ -113,12 +115,10 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         elif dir_method == "KELTNER_BREAKOUT":
             params["mult"] = trial.suggest_float("mult", 1.0, 4.0)
 
-        # Aquí asumo que ya modificaste dir_main para que retorne hr, rr, pr, tr, mae
         hr_dir, rr_dir, pr_dir, tr_dir, mae_dir = dir_main(
             signals_prices, asset, ma_candle, params, shorts
         )
 
-        # Guardamos los KPIs en el trial actual para poder recuperarlos después
         trial.set_user_attr("hr", hr_dir)
         trial.set_user_attr("rr", rr_dir)
         trial.set_user_attr("pr", pr_dir)
@@ -134,15 +134,26 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
 
     study.optimize(objective, n_trials=n_trials)
 
-    if verbose:
-        best_trial = study.best_trial
-        print(f"Método de Dirección: {best_trial.params.get('dir_method')}, Datos optimizados {best_trial.params}")
-        print(f"\nhit ratio: {best_trial.user_attrs.get('hr')}")
-        print(f"risk reward: {best_trial.user_attrs.get('rr')}")
-        print(f"profit factor: {best_trial.user_attrs.get('pr')}")
-        print(f"trades: {best_trial.user_attrs.get('tr')}")
-        print(f"Resultado de estabilidad {-best_trial.value}")
-        print(f"Mae {best_trial.user_attrs.get('mae')}")
-        print(f"Operando {'cortos' if shorts else 'largos'}")
+    best_trial = study.best_trial
 
-    return study
+    best_params: Dict[str, Any] = best_trial.params
+    best_metrics: Dict[str, float] = {
+        "score": -best_trial.value,
+        "hr": best_trial.user_attrs.get("hr"),
+        "rr": best_trial.user_attrs.get("rr"),
+        "pr": best_trial.user_attrs.get("pr"),
+        "tr": best_trial.user_attrs.get("tr"),
+        "mae": best_trial.user_attrs.get("mae"),
+    }
+
+    if verbose:
+        print(f"Método de Dirección: {best_params.get('dir_method')}, Datos optimizados {best_params}")
+        print(f"\nhit ratio: {best_metrics['hr']}")
+        print(f"risk reward: {best_metrics['rr']}")
+        print(f"profit factor: {best_metrics['pr']}")
+        print(f"trades: {best_metrics['tr']}")
+        print(f"Resultado de estabilidad: {best_metrics['score']}")
+        print(f"Mae: {best_metrics['mae']}")
+        print(f"Operando {'cortos' if shorts else 'largos'}\n")
+
+    return best_params, best_metrics
