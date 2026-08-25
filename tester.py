@@ -119,19 +119,17 @@ def mae(signals_and_prices: pd.DataFrame, ohlc_data: pd.DataFrame, short: bool):
     indices: pd.Series = signals_and_prices.index
     mae_val: float = 0
 
-    # Actualemente se recoore la lista así para tomar
-    # todos los pares de inicio-fin del trade
     for i in range(len(indices)//2):
         precio_entrada: float = signals_and_prices.loc[indices[2*i], "Prices"]
         periodo: pd.Series = ohlc_data.loc[indices[2*i]: indices[2*i +1]]
 
         peak_val: float = periodo.max() if short else periodo.min()
  
-        # siempre debe calcularse el precio de entrada menos el valor al
-        # que se necesita, pero hay que tener en cuenta el signo
         trade_mae = (-1 if short else 1) * (precio_entrada - peak_val)
         trade_mae = (trade_mae * 100)/precio_entrada
 
         mae_val += trade_mae
 
     return mae_val/(len(signals_and_prices)//2)
+
+

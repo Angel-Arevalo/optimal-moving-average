@@ -1,4 +1,4 @@
-from typing import Tuple, Dict, Callable
+from typing import Tuple, Dict, Callable, Optional
 import pandas as pd
 from skopt.space import Real, Integer, Categorical
 
@@ -6,8 +6,9 @@ import numpy as np
 import keys
 from tester_dir import hit_ratio, risk_reward, profit_factor, mae
 
+
 def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: int, params_method: dict, short: bool) -> Tuple[float, float, float, float, float]:
-    cond_vector: pd.Series = DIR_METHODS[params_method["name"]](params_method)
+    cond_vector: pd.Series = DIR_METHODS[params_method["name"]](signals_and_prices, params_method)
 
     rever_tr, trend_tr = _split_signals_and_change(signals_and_prices, cond_vector, short, data)
 
@@ -19,6 +20,7 @@ def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: in
     return hr, rr, pr, tr, mae_val
 
 def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond: pd.Series, short: bool, data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+
     entry_sig: int = -1 if short else 1
 
     entrys = signals_and_prices[signals_and_prices["Signals"] == entry_sig]
@@ -56,29 +58,30 @@ def _dir_methods(name: str) -> Callable[[Callable[[dict], pd.Series]], Callable[
     return decorador
 
 @_dir_methods("KEF")
-def kaufman(params: dict) -> pd.Series:
+def kaufman(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
     candle = params["candle"]
     window = params["window"]
     follow_tend = params["follow_tend"]
 
-    mid_close: pd.Series = keys.mid_cache[candle]["close"]
+    cache = data if data is not None else keys.mid_cache[candle]
+    mid_close: pd.Series = cache["close"]
 
     change: pd.Series = (mid_close - mid_close.shift(window)).abs()
-
     single_step_change = (mid_close - mid_close.shift(1)).abs()
     divisor = single_step_change.rolling(window=window).sum()
 
     kef: pd.Series = (change / divisor).replace([np.inf, -np.inf], np.nan).fillna(0)
-    # Condición de cambio de dirección
-    return (kef > follow_tend)
+    return kef > follow_tend
+
 
 @_dir_methods("HURST")
-def H(params: dict) -> pd.Series:
+def H(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
     candle = params["candle"]
     window = params["window"]
     follow_tend = params["follow_tend"]
 
-    mid_close: pd.Series = keys.mid_cache[candle]["close"]
+    cache = data if data is not None else keys.mid_cache[candle]
+    mid_close: pd.Series = cache["close"]
     values = mid_close.to_numpy(dtype=np.float64)
     n_obs = values.shape[0]
 
@@ -107,14 +110,16 @@ def H(params: dict) -> pd.Series:
     hurst_series = pd.Series(result, index=mid_close.index)
     return hurst_series > follow_tend
 
+
 @_dir_methods("LO_MACKINLAY")
-def lo_mackinlay(params: dict) -> pd.Series:
+def lo_mackinlay(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
     candle = params["candle"]
     window = params["window"]
     k = params["k"]
     follow_tend = params["follow_tend"]
 
-    mid_close: pd.Series = keys.mid_cache[candle]["close"]
+    cache = data if data is not None else keys.mid_cache[candle]
+    mid_close: pd.Series = cache["close"]
 
     diff_1 = mid_close.diff(1)
     diff_k = mid_close.diff(k)
@@ -125,15 +130,17 @@ def lo_mackinlay(params: dict) -> pd.Series:
     vr = (var_k / (k * var_1)).replace([np.inf, -np.inf], np.nan).fillna(1.0)
     return vr > follow_tend
 
+
 @_dir_methods("ADX")
-def adx(params: dict) -> pd.Series:
+def adx(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
     candle = params["candle"]
     window = params["window"]
     follow_tend = params["follow_tend"]
 
-    high: pd.Series = keys.mid_cache[candle]["high"]
-    low: pd.Series = keys.mid_cache[candle]["low"]
-    close: pd.Series = keys.mid_cache[candle]["close"]
+    cache = data if data is not None else keys.mid_cache[candle]
+    high: pd.Series = cache["high"]
+    low: pd.Series = cache["low"]
+    close: pd.Series = cache["close"]
 
     up_move = high.diff(1)
     down_move = -low.diff(1)
@@ -155,15 +162,17 @@ def adx(params: dict) -> pd.Series:
 
     return adx_series > follow_tend
 
+
 @_dir_methods("VOL_RATIO")
-def volatility_ratio(params: dict) -> pd.Series:
+def volatility_ratio(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
     candle = params["candle"]
     window = params["window"]
     follow_tend = params["follow_tend"]
 
-    high: pd.Series = keys.mid_cache[candle]["high"]
-    low: pd.Series = keys.mid_cache[candle]["low"]
-    close: pd.Series = keys.mid_cache[candle]["close"]
+    cache = data if data is not None else keys.mid_cache[candle]
+    high: pd.Series = cache["high"]
+    low: pd.Series = cache["low"]
+    close: pd.Series = cache["close"]
 
     sma = close.rolling(window=window).mean()
     std = close.rolling(window=window).std()
@@ -178,14 +187,16 @@ def volatility_ratio(params: dict) -> pd.Series:
     v_ratio = (bbw / (2 * atr_pct)).replace([np.inf, -np.inf], np.nan).fillna(0)
     return v_ratio > follow_tend
 
+
 @_dir_methods("SHANNON")
-def shannon_entropy(params: dict) -> pd.Series:
+def shannon_entropy(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
     candle = params["candle"]
     window = params["window"]
     bins = params["bins"]
     follow_tend = params["follow_tend"]
 
-    mid_close: pd.Series = keys.mid_cache[candle]["close"]
+    cache = data if data is not None else keys.mid_cache[candle]
+    mid_close: pd.Series = cache["close"]
     values = mid_close.to_numpy(dtype=np.float64)
     n_obs = values.shape[0]
 
@@ -224,16 +235,18 @@ def shannon_entropy(params: dict) -> pd.Series:
     entropy = pd.Series(result, index=mid_close.index)
     return entropy < follow_tend
 
+
 @_dir_methods("ATR_EXPANSION")
-def atr_expansion(params: dict) -> pd.Series:
+def atr_expansion(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
     candle = params["candle"]
     window = params["window"]
     lookback_ma = params["lookback_ma"]
     follow_tend = params["follow_tend"]
 
-    high: pd.Series = keys.mid_cache[candle]["high"]
-    low: pd.Series = keys.mid_cache[candle]["low"]
-    close: pd.Series = keys.mid_cache[candle]["close"]
+    cache = data if data is not None else keys.mid_cache[candle]
+    high: pd.Series = cache["high"]
+    low: pd.Series = cache["low"]
+    close: pd.Series = cache["close"]
 
     tr1 = high - low
     tr2 = (high - close.shift(1)).abs()
@@ -246,15 +259,17 @@ def atr_expansion(params: dict) -> pd.Series:
     atr_ratio = (atr / atr_ma).replace([np.inf, -np.inf], np.nan).fillna(0)
     return atr_ratio > follow_tend
 
+
 @_dir_methods("KELTNER_BREAKOUT")
-def keltner_breakout(params: dict) -> pd.Series:
+def keltner_breakout(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
     candle = params["candle"]
     window = params["window"]
     mult = params["mult"]
 
-    high: pd.Series = keys.mid_cache[candle]["high"]
-    low: pd.Series = keys.mid_cache[candle]["low"]
-    close: pd.Series = keys.mid_cache[candle]["close"]
+    cache = data if data is not None else keys.mid_cache[candle]
+    high: pd.Series = cache["high"]
+    low: pd.Series = cache["low"]
+    close: pd.Series = cache["close"]
 
     sma = close.rolling(window=window).mean()
 

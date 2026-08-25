@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 import numpy as np
 import optuna
 import pandas as pd
@@ -22,20 +22,6 @@ dir_methods = [
 ]
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
-
-def calculate_directional_score(val: float, fsr: float, def_v: float, msr: float) -> float:
-    s_fsr = 1.0 / (1.0 + np.exp(-3.0 * (fsr - 1.0)))
-
-    s_def = 1.0 / (1.0 + np.exp(-3.0 * (def_v - 1.0)))
-
-    s_dir = 1.0 + 0.4 * (s_fsr - 0.5) + 0.3 * (s_def - 0.5)
-
-    msr_safe = max(msr, 1e-4)
-    msr_penalty = 0.5 * max(0.0, np.abs(np.log(msr_safe)) - np.log(10.0)) ** 2
-
-    final_score = (val * s_dir) - msr_penalty
-    return float(final_score)
-
 
 def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_trials: int = 100) -> Tuple:
     keys.bid_cache = {}
@@ -71,13 +57,13 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
 
         val: float = f(hr, rr, pr, tr, mae)
 
-        dir_method = trial.suggest_categorical("dir_method", dir_methods)
+        dir_method = trial.suggest_categorical("name", dir_methods)
 
         if dir_method == "":
             return -val
 
-        dir_candle = trial.suggest_int("dir_candle", 1, 100)
-        dir_window = trial.suggest_int("dir_window", 2, 100)
+        dir_candle = trial.suggest_int("candle", 1, 100)
+        dir_window = trial.suggest_int("window", 2, 100)
 
         params = {
             "name": dir_method,
@@ -147,7 +133,7 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
     }
 
     if verbose:
-        print(f"Método de Dirección: {best_params.get('dir_method')}, Datos optimizados {best_params}")
+        print(f"Método de Dirección: {best_params.get('name')}, Datos optimizados {best_params}")
         print(f"\nhit ratio: {best_metrics['hr']}")
         print(f"risk reward: {best_metrics['rr']}")
         print(f"profit factor: {best_metrics['pr']}")
