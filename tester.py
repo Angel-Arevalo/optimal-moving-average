@@ -62,16 +62,26 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.Dat
 
         if señales_semana.iloc[-1] == entry_sig:
             fecha_viernes = fecha_domingo - pd.Timedelta(days=2)
-
             velas_viernes = real_data[real_data.index.normalize() == fecha_viernes.normalize()]
 
             if not velas_viernes.empty:
                 ultimo_real = velas_viernes.index[-1]
                 if ultimo_real == señales_semana.index[-1]:
                     señales_semana = señales_semana.iloc[:-1]
-
                 elif ultimo_real not in señales_semana.index:
                     señales_semana.loc[ultimo_real] = -entry_sig
+            else:
+                fecha_lunes_semana = fecha_domingo - pd.Timedelta(days=6)
+                semana_disponible = real_data[
+                    (real_data.index >= fecha_lunes_semana) & (real_data.index <= fecha_domingo)
+                ]
+
+                if not semana_disponible.empty:
+                    ultimo_disponible = semana_disponible.index[-1]
+                    if ultimo_disponible == señales_semana.index[-1]:
+                        señales_semana = señales_semana.iloc[:-1]
+                    elif ultimo_disponible not in señales_semana.index:
+                        señales_semana.loc[ultimo_disponible] = -entry_sig
 
         if not señales_semana.empty:
             definitive_vector.append(señales_semana)
