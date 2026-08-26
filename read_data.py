@@ -58,6 +58,7 @@ def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, temporality: str 
 
     bid_ohlc: pd.DataFrame = pd.concat(ohlc_bid_total).dropna()
     ask_ohlc: pd.DataFrame = pd.concat(ohlc_ask_total).dropna()
+    bid_ohlc, ask_ohlc = filtrar_horario_activo(bid_ohlc, ask_ohlc, df.index)
 
     mid_ohlc = pd.DataFrame({"open": (bid_ohlc["open"] + ask_ohlc["open"])/2,
                               "high": (bid_ohlc["high"] + ask_ohlc["high"])/2,
@@ -65,3 +66,17 @@ def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, temporality: str 
                               "close": (bid_ohlc["close"] + ask_ohlc["close"])/2})
 
     return bid_ohlc, ask_ohlc, mid_ohlc
+
+def filtrar_horario_activo(bid_ohlc: pd.DataFrame, ask_ohlc: pd.DataFrame, asset_index: pd.DatetimeIndex) -> tuple[pd.DataFrame, pd.DataFrame]:
+    horarios = pd.Series(asset_index.time, index=asset_index)
+    rango_por_dia = horarios.groupby(asset_index.normalize()).agg(['min', 'max'])
+
+    dias = bid_ohlc.index.normalize()
+    horas = bid_ohlc.index.time
+
+    hora_min = dias.map(rango_por_dia['min'])
+    hora_max = dias.map(rango_por_dia['max'])
+
+    mask = (~hora_min.isna()) & (horas >= hora_min) & (horas <= hora_max)
+
+    return bid_ohlc[mask], ask_ohlc[mask]

@@ -44,7 +44,7 @@ def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond:
     df_trend = signals_and_prices[full_flip_mask].copy()
     df_trend["Signals"] = df_trend["Signals"] * -1
 
-    filter_data = data.reindex(df_trend.index, method="nearest")
+    filter_data = data.reindex(df_trend.index, method="bfill")
     df_trend["Prices"] = np.where(df_trend["Signals"] == 1, filter_data["ask"], filter_data["bid"])
 
     return df_reversion, df_trend
