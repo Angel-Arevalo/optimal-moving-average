@@ -31,7 +31,7 @@ def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond:
     entry_idx = entrys.index.to_numpy()
     cond_idx = change_dir_cond.index.to_numpy()
 
-    pos = np.searchsorted(cond_idx, entry_idx, side="right") - 2
+    pos = np.searchsorted(cond_idx, entry_idx, side="right") - 1
     valid_mask = pos >= 0
 
     cond_values = change_dir_cond.values

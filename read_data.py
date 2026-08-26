@@ -4,7 +4,7 @@ from typing import Union
 # Se lee la info para tener un DataFrame con la forma time | spot
 def read_asset(asset_name: str) -> pd.DataFrame:
     if asset_name[-1] == "v":
-        asset_info: pd.DataFrame =  pd.read_csv(asset_name)
+        asset_info: pd.DataFrame = pd.read_csv(asset_name)
     elif asset_name[-1] == "t":
         asset_info: pd.DataFrame = pd.read_parquet(asset_name)
 
@@ -12,11 +12,13 @@ def read_asset(asset_name: str) -> pd.DataFrame:
     asset_info["time"] = pd.to_datetime(asset_info["time"])
     return asset_info.set_index("time").dropna()
 
-# Se organiza la info en el formato ohlc, 
+
+# Se organiza la info en el formato ohlc,
 #                                   open-high-low-close
 #
+
 def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, temporality: str = "min") -> pd.DataFrame:
- 
+
     if temporality not in ["min", "h", "d"]:
         raise ValueError("Temporality not avalible, only acepted min, h, d")
 
@@ -46,37 +48,48 @@ def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, temporality: str 
     ohlc_bid_total = []
     ohlc_ask_total = []
 
+    resample_rule = str(time_rule) + "min"
+
     for fecha_domingo, data_sem in df.groupby(pd.Grouper(freq='W')):
         fecha_viernes = (fecha_domingo - pd.Timedelta(days=2)).replace(hour=23, minute=59)
-        fecha_lunes   = (fecha_domingo - pd.Timedelta(days=6)).replace(hour=00, minute=00)
+        fecha_lunes = (fecha_domingo - pd.Timedelta(days=6)).replace(hour=00, minute=00)
 
-        ohlc_bid_sem = df.loc[fecha_lunes: fecha_viernes]["bid"].resample(str(time_rule) + "min").ohlc() 
-        ohlc_ask_sem = df.loc[fecha_lunes: fecha_viernes]["ask"].resample(str(time_rule) + "min").ohlc()
+        ohlc_bid_sem = (
+            df.loc[fecha_lunes: fecha_viernes]["bid"]
+            .resample(resample_rule, label="right", closed="right")
+            .ohlc()
+        )
+        ohlc_ask_sem = (
+            df.loc[fecha_lunes: fecha_viernes]["ask"]
+            .resample(resample_rule, label="right", closed="right")
+            .ohlc()
+        )
 
         ohlc_bid_total.append(ohlc_bid_sem)
         ohlc_ask_total.append(ohlc_ask_sem)
 
     bid_ohlc: pd.DataFrame = pd.concat(ohlc_bid_total).dropna()
     ask_ohlc: pd.DataFrame = pd.concat(ohlc_ask_total).dropna()
-    bid_ohlc, ask_ohlc = filtrar_horario_activo(bid_ohlc, ask_ohlc, df.index)
+    bid_ohlc, ask_ohlc = filtrar_horario_activo(bid_ohlc, ask_ohlc, df.index, time_rule)
 
-    mid_ohlc = pd.DataFrame({"open": (bid_ohlc["open"] + ask_ohlc["open"])/2,
-                              "high": (bid_ohlc["high"] + ask_ohlc["high"])/2,
-                              "low": (bid_ohlc["low"] + ask_ohlc["low"])/2,
-                              "close": (bid_ohlc["close"] + ask_ohlc["close"])/2})
+    mid_ohlc = pd.DataFrame({"open": (bid_ohlc["open"] + ask_ohlc["open"]) / 2,
+                              "high": (bid_ohlc["high"] + ask_ohlc["high"]) / 2,
+                              "low": (bid_ohlc["low"] + ask_ohlc["low"]) / 2,
+                              "close": (bid_ohlc["close"] + ask_ohlc["close"]) / 2})
 
     return bid_ohlc, ask_ohlc, mid_ohlc
 
-def filtrar_horario_activo(bid_ohlc: pd.DataFrame, ask_ohlc: pd.DataFrame, asset_index: pd.DatetimeIndex) -> tuple[pd.DataFrame, pd.DataFrame]:
+
+def filtrar_horario_activo(bid_ohlc: pd.DataFrame, ask_ohlc: pd.DataFrame, asset_index: pd.DatetimeIndex, candle_minutes: int = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     horarios = pd.Series(asset_index.time, index=asset_index)
     rango_por_dia = horarios.groupby(asset_index.normalize()).agg(['min', 'max'])
 
-    dias = bid_ohlc.index.normalize()
-    horas = bid_ohlc.index.time
+    dias_cierre = bid_ohlc.index.normalize()
+    horas_cierre = bid_ohlc.index.time
 
-    hora_min = dias.map(rango_por_dia['min'])
-    hora_max = dias.map(rango_por_dia['max'])
+    hora_min = dias_cierre.map(rango_por_dia['min'])
+    hora_max = dias_cierre.map(rango_por_dia['max'])
 
-    mask = (~hora_min.isna()) & (horas >= hora_min) & (horas <= hora_max)
+    mask = (~hora_min.isna()) & (hora_min <= horas_cierre) & (horas_cierre <= hora_max)
 
     return bid_ohlc[mask], ask_ohlc[mask]
