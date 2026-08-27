@@ -101,7 +101,7 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         elif dir_method == "KELTNER_BREAKOUT":
             params["mult"] = trial.suggest_float("mult", 1.0, 4.0)
 
-        hr_dir, rr_dir, pr_dir, tr_dir, mae_dir = dir_main(
+        hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir = dir_main(
             signals_prices, asset, ma_candle, params, shorts
         )
 
@@ -111,7 +111,7 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         trial.set_user_attr("tr", tr_dir)
         trial.set_user_attr("mae", mae_dir)
 
-        return -f(hr_dir, rr_dir, pr_dir, tr_dir, mae_dir)
+        return -f(hr_dir, rr_dir, pr_dir, tr_dir, sqn_dir, mae_dir, True)
 
     study = optuna.create_study(
         direction="minimize",

@@ -56,12 +56,12 @@ def ohlc_form(asset: Union[str, pd.DataFrame], time_rule: int, temporality: str 
 
         ohlc_bid_sem = (
             df.loc[fecha_lunes: fecha_viernes]["bid"]
-            .resample(resample_rule, label="right", closed="right")
+            .resample(resample_rule)
             .ohlc()
         )
         ohlc_ask_sem = (
             df.loc[fecha_lunes: fecha_viernes]["ask"]
-            .resample(resample_rule, label="right", closed="right")
+            .resample(resample_rule)
             .ohlc()
         )
 

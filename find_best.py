@@ -16,57 +16,37 @@ warnings.filterwarnings("ignore")
 
 
 def opti_main(data: Union[pd.DataFrame, str], verbose: bool = True, engie: str = "gp", shorts: bool = False) -> list:
+    print(keys.calls)
 
     keys.pre_ohlc = {}
     keys.fill_ohlc_dict(data)
 
-
-    best_result: list = None
-    b_met: str = ""
-    b_ht: float = 0
-    b_rr: float = 0
-    b_pr: float = 0
-    b_trades: int = 0
-    b_score: float = 0
-    b_mae: float = 0
-
     space: list = make_search_space()
-    for method in keys.methods:
 
-        def objective(param: list, kpis: bool = True) -> float:
-            ohlc: pd.DataFrame = keys.mid_cache[param[0]]["close"]
+    def objective(param: list, kpis: bool = True) -> float:
+        method = param[0]
+        print(method, param)
 
-            signals_prices: pd.DataFrame = main(method, ohlc, param[1], shorts, data)
+        ohlc: pd.DataFrame = keys.mid_cache[param[1]]["close"]
 
-            if shorts:
-                hr, rr, pr, tr, mae, sqn = backtest(signals_prices, keys.bid_cache[param[0]]["high"], True, shorts)
-            else:
-                 hr, rr, pr, tr, mae, sqn = backtest(signals_prices, keys.ask_cache[param[0]]["low"], True, shorts)
+        signals_prices: pd.DataFrame = main(method, ohlc, param[2], shorts, data)
 
-            if kpis:
-                return -f(hr, rr, pr, tr, mae)
-
-            return (sqn, hr, rr, pr, tr, mae)
-
-        result: list = optimizer(objective, space, engie)
-
-        if best_result is None:
-            best_result = result
-            b_score, b_ht, b_rr, b_pr, b_trades, b_mae = objective(result, False)
-            b_met = method
-
+        if shorts:
+            hr, rr, pr, tr, mae, sqn = backtest(signals_prices, keys.bid_cache[param[1]]["high"], True, shorts)
         else:
-            score, ht, rr, pr, tr, mae = objective(result, False)
+            hr, rr, pr, tr, mae, sqn = backtest(signals_prices, keys.ask_cache[param[1]]["low"], True, shorts)
 
-            if b_score < score:
-                b_score = score
-                b_ht = ht
-                b_rr = rr 
-                b_pr = pr
-                b_trades= tr
-                best_result = result
-                b_met = method
-                b_mae = mae
+        if kpis:
+            return -f(hr, rr, pr, tr, sqn, mae, True)
+
+        return (sqn, hr, rr, pr, tr, mae)
+
+    print("optimizando")
+    result: list = optimizer(objective, space, engie)
+
+    best_result = result
+    b_score, b_ht, b_rr, b_pr, b_trades, b_mae = objective(result, False)
+    b_met = result[0]
 
     if verbose:
         #print(f'Resultado obtenido entrenando desde {data.index[0].strftime("%Y-%m-%d")} hasta {data.index[-1].strftime("%Y-%m-%d")}')
@@ -76,25 +56,43 @@ def opti_main(data: Union[pd.DataFrame, str], verbose: bool = True, engie: str =
         print(f"Mae {b_mae}")
         print(f"Operando {"cortos" if shorts else "largos"}" )
 
-    best_result.insert(0, b_met)
-
     return best_result
 
-def f(hr: float, rr: float, pr: float, tr: int, mae: float) -> float:
-    expectancy = hr * rr - (1 - hr)
+def softplus(x: float, k: float = 1.0) -> float:
+    kx = k * x
+    if kx > 30.0:
+        return float(x)
+    elif kx < -30.0:
+        return 0.0
+    return float(np.log1p(np.exp(kx)) / k)
 
-    if expectancy <= 0 or pr <= 1.0:
-        return -1000
+def f(
+    hr: float, 
+    rr: float, 
+    pr: float, tr: int, 
+    sqn: float, mae: float = 0.0) -> float:
+    hr_safe = np.clip(hr, 0.01, 0.99)
+    rr_safe = max(rr, 0.01)
+    pr_safe = max(pr, 0.01)
 
-    kelly = expectancy / rr
+    e_stab = (hr_safe * np.log1p(rr_safe)) - (1.0 - hr_safe)
+    g_e = softplus(e_stab, k=10.0)
 
-    confidence = sqrt(min(tr, 100))
+    p_balance = np.sqrt(hr_safe / (1.0 - hr_safe))
 
-    pf_bonus = log(pr)
+    s_pr = np.log1p(softplus(pr_safe - 1.0, k=5.0))
 
-    efficiency = expectancy / (expectancy + mae)
+    c_tr = 10.0 * np.tanh(tr / 30.0) * (1.0 - np.exp(-tr / 10.0))
 
-    return kelly * confidence * pf_bonus * efficiency
+    sqn_positive = softplus(sqn, k=1.0)
+    s_sqn = 5.0 * np.tanh(sqn_positive / 5.0)
+
+    mae_delta = softplus(mae - 0.50, k=4.0)
+    eta_mae = np.exp(-0.15 * mae_delta)
+
+    fitness_score = g_e * p_balance * s_pr * c_tr * (1.0 + 0.25 * s_sqn) * eta_mae
+
+    return float(fitness_score)
 
 def optimizer(objective: Callable, space: list, engie: str = "gp") -> tuple:
     if engie == "gp":
@@ -121,14 +119,11 @@ def optimizer(objective: Callable, space: list, engie: str = "gp") -> tuple:
 
     return result.x
 
-# Ahora se piensa que el espacio depende el método a usarse,
-# en el sentido si es método complejo o no
-
-# Se asume que el primer elemento de extras es el elemento que 
-# equivale a lookbac de cada método 
 
 def make_search_space() -> list:
     search_space: list = []
+
+    search_space.append(Categorical(list(keys.methods), name="name"))
 
     if keys.lookbacks_min < 2:
         raise ValueError("Espacio pequeño de vista hacia atras")

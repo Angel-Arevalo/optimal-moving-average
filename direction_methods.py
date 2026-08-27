@@ -4,7 +4,7 @@ from skopt.space import Real, Integer, Categorical
 
 import numpy as np
 import keys
-from tester_dir import hit_ratio, risk_reward, profit_factor, mae
+from tester_dir import hit_ratio, risk_reward, profit_factor, mae, sqn
 
 
 def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: int, params_method: dict, short: bool) -> Tuple[float, float, float, float, float]:
@@ -17,7 +17,7 @@ def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: in
     pr = profit_factor(rever_tr, trend_tr, short)
     tr = len(rever_tr)//2 + len(trend_tr)//2
     mae_val = mae(rever_tr, trend_tr, short, candle_ma)
-    return hr, rr, pr, tr, mae_val
+    return hr, rr, pr, tr, mae_val, sqn(rever_tr, trend_tr, short)
 
 def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond: pd.Series, short: bool, data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
@@ -31,7 +31,7 @@ def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond:
     entry_idx = entrys.index.to_numpy()
     cond_idx = change_dir_cond.index.to_numpy()
 
-    pos = np.searchsorted(cond_idx, entry_idx, side="right") - 1
+    pos = np.searchsorted(cond_idx, entry_idx, side="right") - 2
     valid_mask = pos >= 0
 
     cond_values = change_dir_cond.values
