@@ -66,6 +66,7 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.Dat
             velas_viernes = real_data[real_data.index.normalize() == fecha_viernes.normalize()]
 
             if not velas_viernes.empty:
+
                 ultimo_real = velas_viernes.index[-1]
                 if ultimo_real == señales_semana.index[-1]:
                     señales_semana = señales_semana.iloc[:-1]

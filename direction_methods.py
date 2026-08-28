@@ -1,4 +1,4 @@
-from typing import Tuple, Dict, Callable, Optional
+from typing import Tuple, Dict, Callable, Optional, List
 import pandas as pd
 from skopt.space import Real, Integer, Categorical
 
@@ -7,10 +7,13 @@ import keys
 from tester_dir import hit_ratio, risk_reward, profit_factor, mae, sqn
 
 
-def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: int, params_method: dict, short: bool) -> Tuple[float, float, float, float, float]:
+def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: int, params_method: dict, short: bool, filter: bool) -> Tuple[float, float, float, float, float]:
     cond_vector: pd.Series = DIR_METHODS[params_method["name"]](signals_and_prices, params_method)
 
     rever_tr, trend_tr = _split_signals_and_change(signals_and_prices, cond_vector, short, data)
+
+    if filter:
+        trend_tr = pd.DataFrame({"Signals": [], "Prices": []})
 
     hr = hit_ratio(rever_tr, trend_tr, short)
     rr = risk_reward(rever_tr, trend_tr, short)
@@ -284,3 +287,71 @@ def keltner_breakout(df_signals: pd.DataFrame, params: dict, data: Optional[pd.D
 
     is_breakout = (close > upper) | (close < lower)
     return is_breakout.fillna(False)
+
+
+
+def compute_wilson_hr(wins: int, total_trades: int, z: float = 1.645) -> float:
+    if total_trades <= 0:
+        return 0.0
+    p = wins / total_trades
+    n = total_trades
+    numerator = p + (z**2) / (2 * n) - z * np.sqrt((p * (1 - p) + (z**2) / (4 * n)) / n)
+    denominator = 1 + (z**2) / n
+    return float(max(0.0, numerator / denominator))
+
+def f_empirical_bayes(
+    hr: float,
+    rr: float,
+    pr: float,
+    tr: int,
+    sqn: float,
+    mae: float,
+    completed_scores: List[float],
+    pnl_vector: Optional[np.ndarray] = None
+) -> float:
+
+    if tr <= 0:
+        return 0.0
+
+    wins = int(round(hr * tr))
+    hr_eb = compute_wilson_hr(wins, tr)
+
+    rr_safe = max(rr, 0.01)
+    rr_compressed = 3.5 * np.tanh(rr_safe / 3.5)
+
+    e_stab = (hr_eb * np.log1p(rr_compressed)) - (1.0 - hr_eb)
+    g_e = float(np.log1p(np.exp(10.0 * e_stab)) / 10.0)
+
+    hr_safe = np.clip(hr_eb, 0.01, 0.99)
+    p_balance = np.sqrt(hr_safe / (1.0 - hr_safe))
+
+    pr_safe = max(pr, 0.01)
+    pr_compressed = 5.0 * np.tanh(pr_safe / 5.0)
+    s_pr = float(np.log1p(np.log1p(np.exp(5.0 * (pr_compressed - 1.0))) / 5.0))
+
+    sqn_pos = float(np.log1p(np.exp(max(sqn, 0.0))))
+    s_sqn = 5.0 * np.tanh(sqn_pos / 5.0)
+
+    mae_delta = float(np.log1p(np.exp(4.0 * (mae - 0.50))) / 4.0)
+    eta_mae = float(np.exp(-0.15 * mae_delta))
+
+    raw_score = g_e * p_balance * s_pr * (1.0 + 0.25 * s_sqn) * eta_mae
+
+
+    if pnl_vector is not None and len(pnl_vector) > 1:
+        sigma_i_sq = float(np.var(pnl_vector, ddof=1) / tr)
+    else:
+
+        sigma_i_sq = 1.0 / np.sqrt(tr)
+
+    if len(completed_scores) >= 5:
+        mu_global = float(np.mean(completed_scores))
+        tau_sq = float(np.var(completed_scores, ddof=1))
+
+        b_i = sigma_i_sq / (sigma_i_sq + tau_sq + 1e-8)
+        b_i = np.clip(b_i, 0.0, 0.95)
+        adjusted_score = (1.0 - b_i) * raw_score + b_i * mu_global
+    else:
+        adjusted_score = raw_score * (1.0 - (1.0 / np.sqrt(tr + 1)))
+
+    return float(max(0.0, adjusted_score))

@@ -27,11 +27,14 @@ def sqn(rev: pd.DataFrame, tend: pd.DataFrame, short: bool) -> float:
 
     trades = np.concatenate([rev_resume, tend_resume])
 
+    if len(trades) < 2:
+        return 0.0
+
     mu: float = np.mean(trades)
     des: float = np.std(trades, ddof=1)
 
-    if des == 0:
-        return 0
+    if des == 0 or np.isnan(des):
+        return 0.0
 
     return np.sqrt(min(len(trades), 100)) * mu/des
 
@@ -92,6 +95,9 @@ def hit_ratio(rev: pd.DataFrame, tend: pd.DataFrame, short: bool) -> float:
         tend_resume = -tend_resume[tend["Signals"] == 1].to_numpy()
 
     trades = np.concatenate([rev_resume, tend_resume])
+    if len(trades) == 0:
+        return 0
+
     win: pd.Series = trades[trades > 0]
 
     return len(win)/len(trades)
