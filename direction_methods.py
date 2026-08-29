@@ -10,7 +10,7 @@ from tester_dir import hit_ratio, risk_reward, profit_factor, mae, sqn
 def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: int, params_method: dict, short: bool, filter: bool) -> Tuple[float, float, float, float, float]:
     cond_vector: pd.Series = DIR_METHODS[params_method["name"]](signals_and_prices, params_method)
 
-    rever_tr, trend_tr = _split_signals_and_change(signals_and_prices, cond_vector, short, data)
+    rever_tr, trend_tr = _split_signals_and_change(signals_and_prices, cond_vector, short, data, candle_ma)
 
     if filter:
         trend_tr = pd.DataFrame({"Signals": [], "Prices": []})
@@ -22,7 +22,8 @@ def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: in
     mae_val = mae(rever_tr, trend_tr, short, candle_ma)
     return hr, rr, pr, tr, mae_val, sqn(rever_tr, trend_tr, short)
 
-def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond: pd.Series, short: bool, data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond: pd.Series, short: bool, data: pd.DataFrame, 
+                              candle_ma: int, bid_df: pd.DataFrame = None, ask_df: pd.DataFrame = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
     entry_sig: int = -1 if short else 1
 
@@ -47,8 +48,35 @@ def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond:
     df_trend = signals_and_prices[full_flip_mask].copy()
     df_trend["Signals"] = df_trend["Signals"] * -1
 
-    filter_data = data.reindex(df_trend.index, method="bfill")
-    df_trend["Prices"] = np.where(df_trend["Signals"] == 1, filter_data["ask"], filter_data["bid"])
+    if not df_trend.empty:
+        if bid_df is not None and ask_df is not None:
+            ask_close = ask_df["close"]
+            bid_close = bid_df["close"]
+        else:
+            ask_close = keys.ask_cache[candle_ma]["close"]
+            bid_close = keys.bid_cache[candle_ma]["close"]
+
+        trend_idx = df_trend.index.to_numpy()
+
+        ask_idx = ask_close.index.to_numpy()
+        bid_idx = bid_close.index.to_numpy()
+
+        ask_pos = np.searchsorted(ask_idx, trend_idx, side="left") - 1
+        bid_pos = np.searchsorted(bid_idx, trend_idx, side="left") - 1
+
+        ask_valid = ask_pos >= 0
+        bid_valid = bid_pos >= 0
+
+        ask_vals = np.where(ask_valid, ask_close.to_numpy()[np.clip(ask_pos, 0, None)], np.nan)
+        bid_vals = np.where(bid_valid, bid_close.to_numpy()[np.clip(bid_pos, 0, None)], np.nan)
+
+        missing = ~(ask_valid & bid_valid) | np.isnan(ask_vals) | np.isnan(bid_vals)
+        if missing.any():
+            df_trend = df_trend[~missing].copy()
+            ask_vals = ask_vals[~missing]
+            bid_vals = bid_vals[~missing]
+
+        df_trend["Prices"] = np.where(df_trend["Signals"] == 1, ask_vals, bid_vals)
 
     return df_reversion, df_trend
 
