@@ -11,21 +11,22 @@ avalible_methods: set = {"SMA", "EMA", "WMA", "DEMA", "TEMA", "TRIMA", "KAMA", "
 # actualmente este método va a retornar el vector de compras y ventas
 # De ahora en adelanta se asume que data ya es el vector de información
 # final
-def main(method: str, data: pd.Series, lookback: int, candle: int, nooh_data: pd.DataFrame, shorts: bool = False) -> pd.DataFrame:
+def main(method: str, data: pd.Series, lookback: int, candle: int, nooh_data: pd.DataFrame, shorts: bool = False, bid_df: pd.DataFrame = None, ask_df: pd.DataFrame = None) -> pd.DataFrame:
 
     if method not in avalible_methods:
         raise ValueError("Not avalible method")
 
-    if method in avalible_methods:
+    ma: pd.Series = SIMPLE_METHODS[method](data, lookback)
+    ma = get_vector_buys(ma, data, nooh_data, shorts)
 
-        ma: pd.Series = SIMPLE_METHODS[method](data, lookback)
-        ma = get_vector_buys(ma, data, nooh_data, shorts)
-
+    if bid_df is not None and ask_df is not None:
+        ask_close = ask_df["close"]
+        bid_close = bid_df["close"]
     else:
-        raise ValueError(f"{method} no implementado")
+        ask_close = keys.ask_cache[candle]["close"]
+        bid_close = keys.bid_cache[candle]["close"]
 
-    print("Hello")
-    precios = np.where(ma == 1, keys.ask_cache[candle]["close"].loc[ma.index], keys.bid_cache[candle]["close"].loc[ma.index])
+    precios = np.where(ma == 1, ask_close.loc[ma.index], bid_close.loc[ma.index])
 
     ma = pd.DataFrame({
         "Signals": ma,
