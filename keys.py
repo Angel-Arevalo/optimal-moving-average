@@ -13,7 +13,7 @@ initial_points: int = 20
 lookbacks: int = 110
 lookbacks_min: int = 2
 
-candles: int = 100
+candles: int = 120
 candles_min: int = 1
 
 methods: set[str] = avalible_methods

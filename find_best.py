@@ -29,7 +29,7 @@ def opti_main(data: Union[pd.DataFrame, str], verbose: bool = True, engie: str =
 
         ohlc: pd.DataFrame = keys.mid_cache[param[1]]["close"]
 
-        signals_prices: pd.DataFrame = main(method, ohlc, param[2], shorts, data)
+        signals_prices: pd.DataFrame = main(method, ohlc, param[2], param[1], data, shorts)
 
         if shorts:
             hr, rr, pr, tr, mae, sqn = backtest(signals_prices, keys.bid_cache[param[1]]["high"], True, shorts)
@@ -37,7 +37,7 @@ def opti_main(data: Union[pd.DataFrame, str], verbose: bool = True, engie: str =
             hr, rr, pr, tr, mae, sqn = backtest(signals_prices, keys.ask_cache[param[1]]["low"], True, shorts)
 
         if kpis:
-            return -f(hr, rr, pr, tr, sqn, mae, True)
+            return -f(hr, rr, pr, tr, sqn, mae)
 
         return (sqn, hr, rr, pr, tr, mae)
 

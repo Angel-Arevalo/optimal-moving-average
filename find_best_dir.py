@@ -93,7 +93,7 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, fi
 
         ohlc: pd.DataFrame = keys.mid_cache[ma_candle]["close"]
         signals_prices: pd.DataFrame = main(
-            ma_method, ohlc, ma_lookback, shorts, asset
+            ma_method, ohlc, ma_lookback, ma_candle, asset, shorts
         )
 
         dir_method = trial.suggest_categorical("name", dir_methods)

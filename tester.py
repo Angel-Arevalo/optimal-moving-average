@@ -39,7 +39,7 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.Dat
     signal_buy: pd.Series = ((pre_man <= pre_data) & (man_back > real_data)).astype(int)
     signal_sell: pd.Series = ((pre_man > pre_data) & (man_back <= real_data)).astype(int)
 
-    vector_buy: pd.Series = (signal_buy - signal_sell).fillna(0).shift(1).dropna()
+    vector_buy: pd.Series = (signal_buy - signal_sell).fillna(0)#.shift(1).dropna()
 
     vector_buy = vector_buy[(vector_buy != 0)]
 

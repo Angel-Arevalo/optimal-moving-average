@@ -34,8 +34,5 @@ df = df.rename(columns={"close": "bid"})
 df["ask"] = df["bid"] + (df["spread"] * point)
 
 df_result = df[["time", "bid", "ask"]].set_index("time")
-_, _, l = read_data.ohlc_form(df_result, 5)
-
-sig = use_tecnics.main("SMA", l["close"], 5, True, df_result)
-
-print(sig)
+print("Optimizando")
+print(find_best.opti_main(df_result, True, "fm", True))

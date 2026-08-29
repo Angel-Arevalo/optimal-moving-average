@@ -4,12 +4,14 @@ import numpy as np
 from typing import Dict, Callable
 from tester import get_vector_buys
 
+import keys
+
 avalible_methods: set = {"SMA", "EMA", "WMA", "DEMA", "TEMA", "TRIMA", "KAMA", "T3", "MIDPOINT"}
 
 # actualmente este método va a retornar el vector de compras y ventas
 # De ahora en adelanta se asume que data ya es el vector de información
 # final
-def main(method: str, data: pd.Series, lookback: int, shorts: bool = False, nooh_data: pd.DataFrame = None) -> pd.DataFrame:
+def main(method: str, data: pd.Series, lookback: int, candle: int, nooh_data: pd.DataFrame, shorts: bool = False) -> pd.DataFrame:
 
     if method not in avalible_methods:
         raise ValueError("Not avalible method")
@@ -22,21 +24,14 @@ def main(method: str, data: pd.Series, lookback: int, shorts: bool = False, nooh
     else:
         raise ValueError(f"{method} no implementado")
 
-    if isinstance(data, pd.DataFrame) and len(data.columns) > 1:
+    print("Hello")
+    precios = np.where(ma == 1, keys.ask_cache[candle]["close"].loc[ma.index], keys.bid_cache[candle]["close"].loc[ma.index])
 
-        filter = data.loc[ma.index]
+    ma = pd.DataFrame({
+        "Signals": ma,
+        "Prices": precios
+    }, index=ma.index)
 
-        precios = np.where(ma == 1, filter['ask'], filter['bid'])
-
-        ma = pd.DataFrame({
-            "Signals": ma,
-            "Prices": precios
-        }, index=ma.index)
-
-    else:
-        ma = pd.concat([ma, data], axis = 1, join = "inner")
-
-    ma.columns = ["Signals", "Prices"]
     return ma
 # Esta función me permite guardar una correspondencia entre
 # Strings y funciones de TAB-Lib 
