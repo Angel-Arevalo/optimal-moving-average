@@ -27,9 +27,19 @@ def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond:
 
     entry_sig: int = -1 if short else 1
 
+    if bid_df is not None and ask_df is not None:
+        ask_close = ask_df["close"]
+        bid_close = bid_df["close"]
+    else:
+        ask_close = keys.ask_cache[candle_ma]["close"]
+        bid_close = keys.bid_cache[candle_ma]["close"]
+
+
     entrys = signals_and_prices[signals_and_prices["Signals"] == entry_sig]
 
-    posiciones = np.searchsorted(change_dir_cond.index, entrys.index, side='left') - 1
+    cierres = ask_close.index.get_indexer(entrys.index)
+
+    posiciones = np.searchsorted(change_dir_cond.index, ask_close.index[cierres + 1], side='left') - 1
 
     mascara_valida = posiciones >= 0
     posiciones_seguras = np.clip(posiciones, 0, None)
@@ -42,13 +52,6 @@ def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond:
 
     if not df_trend.empty:
         df_trend["Signals"] = -df_trend["Signals"]
-
-        if bid_df is not None and ask_df is not None:
-            ask_close = ask_df["close"]
-            bid_close = bid_df["close"]
-        else:
-            ask_close = keys.ask_cache[candle_ma]["close"]
-            bid_close = keys.bid_cache[candle_ma]["close"]
 
         df_trend["Prices"] = np.where(
             df_trend["Signals"] == 1, 

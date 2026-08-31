@@ -102,7 +102,7 @@ def hit_ratio(trade_resume: pd.Series) -> float:
 
 def rr_ratio(trade_resume: pd.Series) -> float:
     winners = trade_resume[trade_resume > 0]
-    losers = trade_resume[trade_resume < 0]
+    losers = trade_resume[trade_resume <= 0]
 
     if winners.empty or losers.empty:
         return 0.0
@@ -113,7 +113,7 @@ def rr_ratio(trade_resume: pd.Series) -> float:
 
 def profit_ratio(trade_resume: pd.Series) -> float:
     winners = trade_resume[trade_resume > 0]
-    losers = trade_resume[trade_resume < 0]
+    losers = trade_resume[trade_resume <= 0]
 
     if winners.empty or losers.empty or losers.sum() == 0:
         return 0.0
