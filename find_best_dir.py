@@ -69,7 +69,7 @@ def generate_deterministic_neighbors(base_params: dict) -> list[dict]:
     return neighbors
 
 
-def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, filter: bool = False, n_trials: int = 100) -> Tuple:
+def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_trials: int = 100) -> Tuple:
     keys.bid_cache = {}
     keys.ask_cache = {}
     keys.mid_cache = {}
@@ -89,6 +89,10 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, fi
         )
         ma_lookback = trial.suggest_int(
             "ma_lookback", keys.lookbacks_min, keys.lookbacks
+        )
+
+        filter = trial.suggest_categorical(
+            "side", ["both", "revert", "tend"]
         )
 
         ohlc: pd.DataFrame = keys.mid_cache[ma_candle]["close"]
@@ -189,6 +193,7 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, fi
         trial.set_user_attr("sqn", sqn_dir)
         trial.set_user_attr("p_score", p_score)
         trial.set_user_attr("std_score", std_score)
+        trial.set_user_attr("side", filter)
 
         return -p_score
 
@@ -211,6 +216,7 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, fi
         "mae": best_trial.user_attrs.get("mae"),
         "sqn": best_trial.user_attrs.get("sqn"),
         "std_score": best_trial.user_attrs.get("std_score"),
+        "filter": best_trial.user_attrs.get("side")
     }
 
     if verbose:
@@ -222,6 +228,6 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, fi
         print(f"Resultado de estabilidad de Meseta (P-Score): {best_metrics['score']:.4f}")
         print(f"Desviación Estándar del Disco (Inestabilidad): {best_metrics['std_score']:.4f}")
         print(f"Mae: {best_metrics['mae']}")
-        print(f"Operando {'cortos' if shorts else 'largos'}\n")
+        print(f"Operando {'cortos' if shorts else 'largos'} con filtro {best_metrics["filter"]}\n")
 
     return best_params, best_metrics

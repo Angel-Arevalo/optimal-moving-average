@@ -7,13 +7,19 @@ import keys
 from tester_dir import hit_ratio, risk_reward, profit_factor, mae, sqn
 
 
-def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: int, params_method: dict, short: bool, filter: bool) -> Tuple[float, float, float, float, float]:
+def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: int, params_method: dict, short: bool, filter: str) -> Tuple[float, float, float, float, float]:
     cond_vector: pd.Series = DIR_METHODS[params_method["name"]](signals_and_prices, params_method)
 
     rever_tr, trend_tr = _split_signals_and_change(signals_and_prices, cond_vector, short, data, candle_ma)
 
-    if filter:
+    if filter == "both":
+        pass
+    elif filter == "revert":
         trend_tr = pd.DataFrame({"Signals": [], "Prices": []})
+    elif filter == "tend":
+        rever_tr = pd.DataFrame({"Signals": [], "Prices": []})
+    else:
+        raise ValueError("No definido")
 
     hr = hit_ratio(rever_tr, trend_tr, short)
     rr = risk_reward(rever_tr, trend_tr, short)
