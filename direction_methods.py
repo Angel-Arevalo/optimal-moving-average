@@ -305,68 +305,46 @@ def keltner_breakout(df_signals: pd.DataFrame, params: dict, data: Optional[pd.D
 
 
 
-def compute_wilson_hr(wins: int, total_trades: int, z: float = 1.645) -> float:
-    if total_trades <= 0:
-        return 0.0
-    p = wins / total_trades
-    n = total_trades
-    numerator = p + (z**2) / (2 * n) - z * np.sqrt((p * (1 - p) + (z**2) / (4 * n)) / n)
-    denominator = 1 + (z**2) / n
-    return float(max(0.0, numerator / denominator))
+@_dir_methods("OU_REVERSION")
+def ou_reversion(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+    candle = params["candle"]
+    window = params["window"]
+    follow_tend = params["follow_tend"]
 
-def f_empirical_bayes(
-    hr: float,
-    rr: float,
-    pr: float,
-    tr: int,
-    sqn: float,
-    mae: float,
-    completed_scores: List[float],
-    pnl_vector: Optional[np.ndarray] = None
-) -> float:
+    cache = data if data is not None else keys.mid_cache[candle]
+    mid_close: pd.Series = cache["close"]
+    values = mid_close.to_numpy(dtype=np.float64)
+    n_obs = values.shape[0]
 
-    if tr <= 0:
-        return 0.0
+    theta_result = np.zeros(n_obs, dtype=np.float64)
 
-    wins = int(round(hr * tr))
-    hr_eb = compute_wilson_hr(wins, tr)
+    if n_obs >= window:
+        price_windows = np.lib.stride_tricks.sliding_window_view(values, window)
 
-    rr_safe = max(rr, 0.01)
-    rr_compressed = 3.5 * np.tanh(rr_safe / 3.5)
+        x_prev = price_windows[:, :-1]
+        x_curr = price_windows[:, 1:]
 
-    e_stab = (hr_eb * np.log1p(rr_compressed)) - (1.0 - hr_eb)
-    g_e = float(np.log1p(np.exp(10.0 * e_stab)) / 10.0)
+        n = x_prev.shape[1]
 
-    hr_safe = np.clip(hr_eb, 0.01, 0.99)
-    p_balance = np.sqrt(hr_safe / (1.0 - hr_safe))
+        mean_prev = x_prev.mean(axis=1, keepdims=True)
+        mean_curr = x_curr.mean(axis=1, keepdims=True)
 
-    pr_safe = max(pr, 0.01)
-    pr_compressed = 5.0 * np.tanh(pr_safe / 5.0)
-    s_pr = float(np.log1p(np.log1p(np.exp(5.0 * (pr_compressed - 1.0))) / 5.0))
+        cov = ((x_prev - mean_prev) * (x_curr - mean_curr)).sum(axis=1)
+        var_prev = ((x_prev - mean_prev) ** 2).sum(axis=1)
 
-    sqn_pos = float(np.log1p(np.exp(max(sqn, 0.0))))
-    s_sqn = 5.0 * np.tanh(sqn_pos / 5.0)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            b = np.where(var_prev > 0, cov / var_prev, 1.0)
 
-    mae_delta = float(np.log1p(np.exp(4.0 * (mae - 0.50))) / 4.0)
-    eta_mae = float(np.exp(-0.15 * mae_delta))
+        b_safe = np.clip(b, 1e-6, 0.999999)
 
-    raw_score = g_e * p_balance * s_pr * (1.0 + 0.25 * s_sqn) * eta_mae
+        theta = -np.log(b_safe)
 
+        theta = np.where(b < 0.999999, theta, 0.0)
 
-    if pnl_vector is not None and len(pnl_vector) > 1:
-        sigma_i_sq = float(np.var(pnl_vector, ddof=1) / tr)
-    else:
+        theta = np.where(b > 1e-6, theta, 0.0)
 
-        sigma_i_sq = 1.0 / np.sqrt(tr)
+        theta_result[window - 1:] = theta
 
-    if len(completed_scores) >= 5:
-        mu_global = float(np.mean(completed_scores))
-        tau_sq = float(np.var(completed_scores, ddof=1))
+    theta_series = pd.Series(theta_result, index=mid_close.index)
 
-        b_i = sigma_i_sq / (sigma_i_sq + tau_sq + 1e-8)
-        b_i = np.clip(b_i, 0.0, 0.95)
-        adjusted_score = (1.0 - b_i) * raw_score + b_i * mu_global
-    else:
-        adjusted_score = raw_score * (1.0 - (1.0 / np.sqrt(tr + 1)))
-
-    return float(max(0.0, adjusted_score))
+    return theta_series < follow_tend

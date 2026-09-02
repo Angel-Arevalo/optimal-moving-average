@@ -16,7 +16,6 @@ warnings.filterwarnings("ignore")
 
 
 def opti_main(data: Union[pd.DataFrame, str], verbose: bool = True, engie: str = "gp", shorts: bool = False) -> list:
-    print(keys.calls)
 
     keys.pre_ohlc = {}
     keys.fill_ohlc_dict(data)
@@ -25,7 +24,6 @@ def opti_main(data: Union[pd.DataFrame, str], verbose: bool = True, engie: str =
 
     def objective(param: list, kpis: bool = True) -> float:
         method = param[0]
-        print(method, param)
 
         ohlc: pd.DataFrame = keys.mid_cache[param[1]]["close"]
 
@@ -41,7 +39,6 @@ def opti_main(data: Union[pd.DataFrame, str], verbose: bool = True, engie: str =
 
         return (sqn, hr, rr, pr, tr, mae)
 
-    print("optimizando")
     result: list = optimizer(objective, space, engie)
 
     best_result = result
@@ -75,7 +72,7 @@ def f(
     rr_safe = max(rr, 0.01)
     pr_safe = max(pr, 0.01)
 
-    e_stab = (hr_safe * np.log1p(rr_safe)) - (1.0 - hr_safe)
+    e_stab = (hr_safe * rr_safe) - (1.0 - hr_safe)
     g_e = softplus(e_stab, k=10.0)
 
     p_balance = np.sqrt(hr_safe / (1.0 - hr_safe))

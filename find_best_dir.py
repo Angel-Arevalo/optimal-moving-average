@@ -11,7 +11,7 @@ from tester import backtest
 from find_best import f
 from use_tecnics import main
 
-dir_methods = [
+dir_methods = [    
     "KEF",
     "HURST",
     "LO_MACKINLAY",
@@ -20,6 +20,7 @@ dir_methods = [
     "SHANNON",
     "ATR_EXPANSION",
     "KELTNER_BREAKOUT",
+    "OU_REVERSION"
 ]
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -100,7 +101,25 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
             ma_method, ohlc, ma_lookback, ma_candle, asset, shorts
         )
 
+        ht, rr, pr, tr, mae, sqn = backtest(signals_prices, ohlc, True, shorts)
+
         dir_method = trial.suggest_categorical("name", dir_methods)
+
+        # NO USAR POR EL MOMENTO, BACK_DIR NO LO 
+        # SOPORTA
+        if dir_method == "":
+            t = f(ht, rr, pr, tr, sqn, mae)
+            trial.set_user_attr("hr", ht)
+            trial.set_user_attr("rr", rr)
+            trial.set_user_attr("pr", pr)
+            trial.set_user_attr("tr", tr)
+            trial.set_user_attr("mae", mae)
+            trial.set_user_attr("sqn", sqn)
+            trial.set_user_attr("p_score", t)
+            trial.set_user_attr("std_score", 0)
+            trial.set_user_attr("side", filter)
+
+            return t
 
         dir_candle = trial.suggest_int("candle", 1, 100)
         dir_window = trial.suggest_int("window", 2, 100)
@@ -140,62 +159,20 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
             )
         elif dir_method == "KELTNER_BREAKOUT":
             params["mult"] = trial.suggest_float("mult", 1.0, 4.0)
+        elif dir_method == "OU_REVERSION":
+            params["follow_tend"] = trial.suggest_float("follow_tend", 0.01, 1.0)
 
-        neighbor_configs = generate_deterministic_neighbors(params)
-        neighbor_scores = []
-        center_metrics = None
+        hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir = dir_main(signals_prices, asset, ma_candle, params, shorts, filter)
 
-        for idx, p_config in enumerate(neighbor_configs):
-            cache_key = make_cache_key(ma_method, ma_candle, ma_lookback, p_config, filter)
-
-            if cache_key in score_cache:
-                eb_score, hr_v, rr_v, pr_v, tr_v, mae_v, sqn_v = score_cache[cache_key]
-            else:
-                res_dir = dir_main(
-                    signals_prices, asset, ma_candle, p_config, shorts, filter
-                )
-
-                if len(res_dir) == 7:
-                    hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir, _ = res_dir
-                else:
-                    hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir = res_dir
-
-                eb_score = f(
-                    hr=hr_dir,
-                    rr=rr_dir,
-                    pr=pr_dir,
-                    tr=tr_dir,
-                    sqn=sqn_dir,
-                    mae=mae_dir,
-                )
-
-                score_cache[cache_key] = (eb_score, hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir)
-                hr_v, rr_v, pr_v, tr_v, mae_v, sqn_v = hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir
-
-            neighbor_scores.append(eb_score)
-
-            if idx == 0:
-                center_metrics = (hr_v, rr_v, pr_v, tr_v, mae_v, sqn_v)
-
-        mean_score = float(np.mean(neighbor_scores))
-        std_score = float(np.std(neighbor_scores))
-
-        p_score = mean_score - 1.5 * std_score
-
-        completed_scores.append(p_score)
-
-        hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir = center_metrics
         trial.set_user_attr("hr", hr_dir)
         trial.set_user_attr("rr", rr_dir)
         trial.set_user_attr("pr", pr_dir)
         trial.set_user_attr("tr", tr_dir)
         trial.set_user_attr("mae", mae_dir)
         trial.set_user_attr("sqn", sqn_dir)
-        trial.set_user_attr("p_score", p_score)
-        trial.set_user_attr("std_score", std_score)
         trial.set_user_attr("side", filter)
 
-        return -p_score
+        return -f(hr_dir, rr_dir, pr_dir, tr_dir, sqn_dir, mae_dir)
 
     study = optuna.create_study(
         direction="minimize",
@@ -215,7 +192,6 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         "tr": best_trial.user_attrs.get("tr"),
         "mae": best_trial.user_attrs.get("mae"),
         "sqn": best_trial.user_attrs.get("sqn"),
-        "std_score": best_trial.user_attrs.get("std_score"),
         "filter": best_trial.user_attrs.get("side")
     }
 
@@ -225,8 +201,7 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         print(f"risk reward: {best_metrics['rr']}")
         print(f"profit factor: {best_metrics['pr']}")
         print(f"trades: {best_metrics['tr']}")
-        print(f"Resultado de estabilidad de Meseta (P-Score): {best_metrics['score']:.4f}")
-        print(f"Desviación Estándar del Disco (Inestabilidad): {best_metrics['std_score']:.4f}")
+        print(f"Sqn: {best_metrics['sqn']:.4f}")
         print(f"Mae: {best_metrics['mae']}")
         print(f"Operando {'cortos' if shorts else 'largos'} con filtro {best_metrics["filter"]}\n")
 
