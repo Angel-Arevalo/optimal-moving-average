@@ -14,12 +14,12 @@ from use_tecnics import main
 dir_methods = [    
     "KEF",
     "HURST",
-    "LO_MACKINLAY",
+#    "LO_MACKINLAY",
     "ADX",
-    "VOL_RATIO",
-    "SHANNON",
+#    "VOL_RATIO",
+#    "SHANNON",
     "ATR_EXPANSION",
-    "KELTNER_BREAKOUT",
+#    "KELTNER_BREAKOUT",
     "OU_REVERSION"
 ]
 
@@ -92,9 +92,10 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
             "ma_lookback", keys.lookbacks_min, keys.lookbacks
         )
 
-        filter = trial.suggest_categorical(
-            "side", ["both", "revert", "tend"]
-        )
+        filter = "revert" 
+#        trial.suggest_categorical(
+#            "side", ["both", "revert", "tend"]
+#        )
 
         ohlc: pd.DataFrame = keys.mid_cache[ma_candle]["close"]
         signals_prices: pd.DataFrame = main(
