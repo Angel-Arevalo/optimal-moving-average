@@ -8,67 +8,22 @@ from direction_methods import dir_main
 import keys
 
 from tester import backtest
-from find_best import f
+from find_best import softplus
 from use_tecnics import main
 
-dir_methods = [    
+dir_methods = [
     "KEF",
     "HURST",
-#    "LO_MACKINLAY",
+#   "LO_MACKINLAY",
     "ADX",
-#    "VOL_RATIO",
-#    "SHANNON",
+#   "VOL_RATIO",
+#   "SHANNON",
     "ATR_EXPANSION",
-#    "KELTNER_BREAKOUT",
+#   "KELTNER_BREAKOUT",
     "OU_REVERSION"
 ]
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
-
-
-def make_cache_key(ma_method: str, ma_candle: int, ma_lookback: int, params: dict, filter_val: bool) -> tuple:
-    sorted_params = tuple(sorted((k, v) for k, v in params.items()))
-    return (ma_method, ma_candle, ma_lookback, filter_val, sorted_params)
-
-
-def generate_deterministic_neighbors(base_params: dict) -> list[dict]:
-    neighbors = [base_params]
-
-    OFFSETS = [
-        {"int": 1, "float": 0.05},
-        {"int": -1, "float": -0.05},
-        {"int": 2, "float": 0.10},
-        {"int": -2, "float": -0.10},
-        {"int": 1, "float": -0.05},
-        {"int": -1, "float": 0.05},
-        {"int": 3, "float": 0.15},
-        {"int": -3, "float": -0.15},
-    ]
-
-    BOUNDS = {
-        "candle": (1, 100, int),
-        "window": (2, 100, int),
-        "follow_tend": (0.01, 50.0, float),
-        "k": (2, 10, int),
-        "bins": (5, 20, int),
-        "lookback_ma": (20, 100, int),
-        "mult": (1.0, 4.0, float),
-    }
-
-    for offset in OFFSETS:
-        neighbor = copy.deepcopy(base_params)
-        for key, val in base_params.items():
-            if key in BOUNDS:
-                min_v, max_v, v_type = BOUNDS[key]
-                if v_type == int:
-                    new_val = int(np.clip(val + offset["int"], min_v, max_v))
-                else:
-                    new_val = float(np.clip(val * (1.0 + offset["float"]), min_v, max_v))
-                neighbor[key] = new_val
-        neighbors.append(neighbor)
-
-    return neighbors
-
 
 def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_trials: int = 100) -> Tuple:
     keys.bid_cache = {}
@@ -78,7 +33,6 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
     keys.fill_ohlc_dict(asset)
 
     completed_scores: List[float] = []
-
     score_cache: Dict[tuple, tuple] = {}
 
     def objective(trial: optuna.Trial) -> float:
@@ -92,36 +46,16 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
             "ma_lookback", keys.lookbacks_min, keys.lookbacks
         )
 
-        filter = "revert" 
-#        trial.suggest_categorical(
-#            "side", ["both", "revert", "tend"]
-#        )
+        filter_side = "both" 
 
         ohlc: pd.DataFrame = keys.mid_cache[ma_candle]["close"]
         signals_prices: pd.DataFrame = main(
             ma_method, ohlc, ma_lookback, ma_candle, asset, shorts
         )
 
-        ht, rr, pr, tr, mae, sqn = backtest(signals_prices, ohlc, True, shorts)
+        initial_params: tuple = backtest(signals_prices, ohlc, True, shorts)
 
         dir_method = trial.suggest_categorical("name", dir_methods)
-
-        # NO USAR POR EL MOMENTO, BACK_DIR NO LO 
-        # SOPORTA
-        if dir_method == "":
-            t = f(ht, rr, pr, tr, sqn, mae)
-            trial.set_user_attr("hr", ht)
-            trial.set_user_attr("rr", rr)
-            trial.set_user_attr("pr", pr)
-            trial.set_user_attr("tr", tr)
-            trial.set_user_attr("mae", mae)
-            trial.set_user_attr("sqn", sqn)
-            trial.set_user_attr("p_score", t)
-            trial.set_user_attr("std_score", 0)
-            trial.set_user_attr("side", filter)
-
-            return t
-
         dir_candle = trial.suggest_int("candle", 1, 100)
         dir_window = trial.suggest_int("window", 2, 100)
 
@@ -163,7 +97,9 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         elif dir_method == "OU_REVERSION":
             params["follow_tend"] = trial.suggest_float("follow_tend", 0.01, 1.0)
 
-        hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir = dir_main(signals_prices, asset, ma_candle, params, shorts, filter)
+        filter_params: tuple = dir_main(signals_prices, asset, ma_candle, params, shorts, filter_side)
+
+        hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir = filter_params
 
         trial.set_user_attr("hr", hr_dir)
         trial.set_user_attr("rr", rr_dir)
@@ -171,9 +107,9 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         trial.set_user_attr("tr", tr_dir)
         trial.set_user_attr("mae", mae_dir)
         trial.set_user_attr("sqn", sqn_dir)
-        trial.set_user_attr("side", filter)
+        trial.set_user_attr("side", filter_side)
 
-        return -f(hr_dir, rr_dir, pr_dir, tr_dir, sqn_dir, mae_dir)
+        return -f(initial_params, filter_params)
 
     study = optuna.create_study(
         direction="minimize",
@@ -204,6 +140,36 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         print(f"trades: {best_metrics['tr']}")
         print(f"Sqn: {best_metrics['sqn']:.4f}")
         print(f"Mae: {best_metrics['mae']}")
-        print(f"Operando {'cortos' if shorts else 'largos'} con filtro {best_metrics["filter"]}\n")
+        print(f"Operando {'cortos' if shorts else 'largos'} con filtro {best_metrics['filter']}\n")
 
     return best_params, best_metrics
+
+
+def f(
+    initial_params: tuple[float, float, float, float, float, float], 
+    filter_params: tuple[float, float, float, float, float, float],
+    beta: float = 2.0,
+    lmbda: float = 1.5
+) -> float:
+    e: float = 1e-6
+
+    hr_0, rr_0, pf_0, tr_0, mae_0, sqn_0 = initial_params
+    hr_f, rr_f, pf_f, tr_f, mae_f, sqn_f = filter_params
+
+    utilidad = (
+        np.log((pf_f + e) / (pf_0 + e)) +
+        np.log((sqn_f + e) / (sqn_0 + e)) +
+        np.log((rr_f + e) / (rr_0 + e)) +
+        np.log((mae_0 + e) / (mae_f + e))
+    )
+
+    delta_hr_rel = np.log((hr_f + e) / (hr_0 + e))
+    delta_hr_rel_n = delta_hr_rel * np.sqrt(tr_f)
+
+    score = (
+        utilidad + 
+        np.log(1 + softplus(delta_hr_rel_n, beta)) - 
+        lmbda * softplus(-delta_hr_rel_n, beta)
+    )
+
+    return float(score)
