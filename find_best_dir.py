@@ -8,7 +8,7 @@ from direction_methods import dir_main
 import keys
 
 from tester import backtest
-from find_best import softplus
+from find_best import softplus, f as f_single
 from use_tecnics import main
 
 dir_methods = [
@@ -46,14 +46,15 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
             "ma_lookback", keys.lookbacks_min, keys.lookbacks
         )
 
-        filter_side = "both" 
+        filter_side = "revert" 
 
         ohlc: pd.DataFrame = keys.mid_cache[ma_candle]["close"]
-        signals_prices: pd.DataFrame = main(
-            ma_method, ohlc, ma_lookback, ma_candle, asset, shorts
-        )
+        signals_prices: pd.DataFrame = main(ma_method, ohlc, ma_lookback, ma_candle, asset, shorts)
 
-        initial_params: tuple = backtest(signals_prices, ohlc, True, shorts)
+        if shorts:
+            initial_params: tuple = backtest(signals_prices, keys.bid_cache[ma_candle]["high"], True, shorts)
+        else:
+            initial_params: tuple = backtest(signals_prices, keys.ask_cache[ma_candle]["low"], True, shorts)
 
         dir_method = trial.suggest_categorical("name", dir_methods)
         dir_candle = trial.suggest_int("candle", 1, 100)
@@ -108,6 +109,12 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         trial.set_user_attr("mae", mae_dir)
         trial.set_user_attr("sqn", sqn_dir)
         trial.set_user_attr("side", filter_side)
+        trial.set_user_attr("hr_", initial_params[0])
+        trial.set_user_attr("rr_", initial_params[1])
+        trial.set_user_attr("pr_", initial_params[2])
+        trial.set_user_attr("tr_", initial_params[3])
+        trial.set_user_attr("mae_", initial_params[4])
+        trial.set_user_attr("sqn_", initial_params[5])
 
         return -f(initial_params, filter_params)
 
@@ -129,47 +136,63 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         "tr": best_trial.user_attrs.get("tr"),
         "mae": best_trial.user_attrs.get("mae"),
         "sqn": best_trial.user_attrs.get("sqn"),
-        "filter": best_trial.user_attrs.get("side")
+        "filter": best_trial.user_attrs.get("side"),
+        "hr_": best_trial.user_attrs.get("hr_"),
+        "rr_": best_trial.user_attrs.get("rr_"),
+        "pr_": best_trial.user_attrs.get("pr_"),
+        "tr_": best_trial.user_attrs.get("tr_"),
+        "mae_": best_trial.user_attrs.get("mae_"),
+        "sqn_": best_trial.user_attrs.get("sqn_"),
+
     }
 
     if verbose:
-        print(f"Método de Dirección: {best_params.get('name')}, Datos optimizados {best_params}")
-        print(f"\nhit ratio: {best_metrics['hr']}")
-        print(f"risk reward: {best_metrics['rr']}")
-        print(f"profit factor: {best_metrics['pr']}")
-        print(f"trades: {best_metrics['tr']}")
-        print(f"Sqn: {best_metrics['sqn']:.4f}")
-        print(f"Mae: {best_metrics['mae']}")
-        print(f"Operando {'cortos' if shorts else 'largos'} con filtro {best_metrics['filter']}\n")
+        hr_0  = best_metrics.get('hr_') or 0.0
+        hr_f  = best_metrics.get('hr') or 0.0
+        rr_0  = best_metrics.get('rr_') or 0.0
+        rr_f  = best_metrics.get('rr') or 0.0
+        pr_0  = best_metrics.get('pr_') or 0.0
+        pr_f  = best_metrics.get('pr') or 0.0
+        tr_0  = best_metrics.get("tr_") if best_metrics.get("tr_") is not None else "N/A" 
+        tr_f  = best_metrics.get('tr') if best_metrics.get('tr') is not None else "N/A"
+        sqn_0 = best_metrics.get('sqn_') or 0.0
+        sqn_f = best_metrics.get('sqn') or 0.0
+        mae_0 = best_metrics.get('mae_') or 0.0
+        mae_f = best_metrics.get('mae') or 0.0
+
+        print(f"\nMethod: {best_params.get('name')} | Side: {'Shorts' if shorts else 'Longs'} | Filter: {best_metrics['filter']}")
+        print(f"Params: {best_params}\n")
+
+        print(f"{'Métrica':<15} | {'Base (Inicial)':<15} | {'Filtrado':<15}")
+        print("-" * 49)
+
+        print(f"{'Hit Ratio':<15} | {hr_0 * 100:>14.2f}% | {hr_f * 100:>14.2f}%")
+        print(f"{'Risk Reward':<15} | {rr_0:>15.4f} | {rr_f:>15.4f}")
+        print(f"{'Profit Factor':<15} | {pr_0:>15.4f} | {pr_f:>15.4f}")
+        print(f"{'Trades':<15} | {str(tr_0):>15} | {str(tr_f):>15}")
+        print(f"{'SQN':<15} | {sqn_0:>15.4f} | {sqn_f:>15.4f}")
+        print(f"{'MAE':<15} | {mae_0:>15.5f} | {mae_f:>15.5f}")
+        print("-" * 49 + "\n")
 
     return best_params, best_metrics
 
+def f(initial_params: Tuple[float, ...], filter_params: Tuple[float, ...]) -> float:
+    hr_0, rr_0, pr_0, tr_0, mae_0, sqn_0 = initial_params
+    hr_f, rr_f, pr_f, tr_f, mae_f, sqn_f = filter_params
 
-def f(
-    initial_params: tuple[float, float, float, float, float, float], 
-    filter_params: tuple[float, float, float, float, float, float],
-    beta: float = 2.0,
-    lmbda: float = 1.5
-) -> float:
-    e: float = 1e-6
+    eps = 1e-6
 
-    hr_0, rr_0, pf_0, tr_0, mae_0, sqn_0 = initial_params
-    hr_f, rr_f, pf_f, tr_f, mae_f, sqn_f = filter_params
+    q_base = f_single(hr_0, rr_0, pr_0, int(tr_0), sqn_0, mae_0)
 
-    utilidad = (
-        np.log((pf_f + e) / (pf_0 + e)) +
-        np.log((sqn_f + e) / (sqn_0 + e)) +
-        np.log((rr_f + e) / (rr_0 + e)) +
-        np.log((mae_0 + e) / (mae_f + e))
-    )
+    q_filtered = f_single(hr_f, rr_f, pr_f, int(tr_f), sqn_f, mae_f)
 
-    delta_hr_rel = np.log((hr_f + e) / (hr_0 + e))
-    delta_hr_rel_n = delta_hr_rel * np.sqrt(tr_f)
+    r_improvement = (q_filtered + eps) / (q_base + eps)
 
-    score = (
-        utilidad + 
-        np.log(1 + softplus(delta_hr_rel_n, beta)) - 
-        lmbda * softplus(-delta_hr_rel_n, beta)
-    )
+    d_hr = hr_f - hr_0
+    k_gate = 100.0
 
-    return float(score)
+    gate_hr = 1.0 / (1.0 + np.exp(-k_gate * d_hr))
+
+    final_score = q_filtered * r_improvement * gate_hr
+
+    return float(final_score)

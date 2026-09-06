@@ -143,14 +143,17 @@ def profit_factor(rev: pd.DataFrame, tend: pd.DataFrame, short: bool) -> float:
     return win.sum() / (-loss.sum())
 
 def mae(rev: pd.DataFrame, tend: pd.DataFrame, short: bool, candle: int) -> float:
-    if short:
-        rev_ohlc: float = mae_t(rev, keys.bid_cache[candle]["high"], short)
-        tend_ohlc: float = mae_t(tend, keys.ask_cache[candle]["low"], not short)
-    else:
-        rev_ohlc: float = mae_t(rev, keys.ask_cache[candle]["low"], short)
-        tend_ohlc: float = mae_t(tend, keys.bid_cache[candle]["high"], not short)
+    n_rev = len(rev) // 2
+    n_tend = len(tend) // 2
 
-    if len(rev) == 0 and len(tend) == 0:
+    if n_rev + n_tend == 0:
         return 0
 
-    return (rev_ohlc + tend_ohlc)/(len(rev)//2 + len(tend)//2)
+    if short:
+        rev_ohlc: float = mae_t(rev, keys.bid_cache[candle]["high"], short) if n_rev else 0.0
+        tend_ohlc: float = mae_t(tend, keys.ask_cache[candle]["low"], not short) if n_tend else 0.0
+    else:
+        rev_ohlc: float = mae_t(rev, keys.ask_cache[candle]["low"], short) if n_rev else 0.0
+        tend_ohlc: float = mae_t(tend, keys.bid_cache[candle]["high"], not short) if n_tend else 0.0
+
+    return (rev_ohlc * n_rev + tend_ohlc * n_tend) / (n_rev + n_tend)
