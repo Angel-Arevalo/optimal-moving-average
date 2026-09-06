@@ -5,19 +5,46 @@ from skopt.space import Real, Integer, Categorical
 import numpy as np
 import keys
 from tester_dir import hit_ratio, risk_reward, profit_factor, mae, sqn
+from find_best import f
 
-
-def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: int, params_method: dict, short: bool, filter: str) -> Tuple[float, float, float, float, float]:
+def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: int, params_method: dict, short: bool, filter: str) -> Tuple[float, ...]:
     cond_vector: pd.Series = DIR_METHODS[params_method["name"]](signals_and_prices, params_method)
 
     rever_tr, trend_tr = _split_signals_and_change(signals_and_prices, cond_vector, short, data, candle_ma)
 
+    tr_filtered = len(trend_tr)//2
+    empty_df = pd.DataFrame({"Signals": [], "Prices": []})
+
+    hr_re, hr_td = hit_ratio(rever_tr, empty_df, short), hit_ratio(empty_df, trend_tr, not short)
+    rr_re, rr_td = risk_reward(rever_tr, empty_df, short), risk_reward(empty_df, trend_tr, not short)
+    pr_re, pr_td = profit_factor(rever_tr, empty_df, short), profit_factor(empty_df, trend_tr, not short)
+    tr_re, tr_td = len(rever_tr)//2, tr_filtered
+    sq_re, sq_td = sqn(rever_tr, empty_df, short), sqn(empty_df, trend_tr, not short)
+    ma_re, ma_td = mae(rever_tr, empty_df, short, candle_ma), mae(empty_df, trend_tr, not short, candle_ma)
+
+    f_re = f(hr_re,
+             rr_re,
+             pr_re,
+             tr_re,
+             sq_re,
+             ma_re
+    )
+
+    f_td = f(hr_td,
+             rr_td,
+             pr_td,
+             tr_td,
+             sq_td,
+             ma_td
+    )
+
+
     if filter == "both":
         pass
     elif filter == "revert":
-        trend_tr = pd.DataFrame({"Signals": [], "Prices": []})
+        trend_tr =  empty_df
     elif filter == "tend":
-        rever_tr = pd.DataFrame({"Signals": [], "Prices": []})
+        rever_tr = empty_df
     else:
         raise ValueError("No definido")
 
@@ -26,7 +53,8 @@ def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: in
     pr = profit_factor(rever_tr, trend_tr, short)
     tr = len(rever_tr)//2 + len(trend_tr)//2
     mae_val = mae(rever_tr, trend_tr, short, candle_ma)
-    return hr, rr, pr, tr, mae_val, sqn(rever_tr, trend_tr, short)
+
+    return hr, rr, pr, tr, mae_val, sqn(rever_tr, trend_tr, short), tr_filtered, f_re, f_td
 
 def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond: pd.Series, short: bool, data: pd.DataFrame, 
                               candle_ma: int, bid_df: pd.DataFrame = None, ask_df: pd.DataFrame = None) -> Tuple[pd.DataFrame, pd.DataFrame]:

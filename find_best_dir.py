@@ -46,7 +46,7 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
             "ma_lookback", keys.lookbacks_min, keys.lookbacks
         )
 
-        filter_side = "revert" 
+        filter_side = "both" 
 
         ohlc: pd.DataFrame = keys.mid_cache[ma_candle]["close"]
         signals_prices: pd.DataFrame = main(ma_method, ohlc, ma_lookback, ma_candle, asset, shorts)
@@ -100,7 +100,7 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
 
         filter_params: tuple = dir_main(signals_prices, asset, ma_candle, params, shorts, filter_side)
 
-        hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir = filter_params
+        hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir, intervenidos, _, _ = filter_params
 
         trial.set_user_attr("hr", hr_dir)
         trial.set_user_attr("rr", rr_dir)
@@ -115,6 +115,7 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         trial.set_user_attr("tr_", initial_params[3])
         trial.set_user_attr("mae_", initial_params[4])
         trial.set_user_attr("sqn_", initial_params[5])
+        trial.set_user_attr("tr_int", intervenidos)
 
         return -f(initial_params, filter_params)
 
@@ -143,7 +144,7 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         "tr_": best_trial.user_attrs.get("tr_"),
         "mae_": best_trial.user_attrs.get("mae_"),
         "sqn_": best_trial.user_attrs.get("sqn_"),
-
+        "tr_inter": best_trial.user_attrs.get("tr_int")
     }
 
     if verbose:
@@ -155,6 +156,7 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         pr_f  = best_metrics.get('pr') or 0.0
         tr_0  = best_metrics.get("tr_") if best_metrics.get("tr_") is not None else "N/A" 
         tr_f  = best_metrics.get('tr') if best_metrics.get('tr') is not None else "N/A"
+        tr_i  = best_metrics.get('tr_inter') if best_metrics.get('tr_inter') is not None else "N/A"
         sqn_0 = best_metrics.get('sqn_') or 0.0
         sqn_f = best_metrics.get('sqn') or 0.0
         mae_0 = best_metrics.get('mae_') or 0.0
@@ -169,7 +171,9 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         print(f"{'Hit Ratio':<15} | {hr_0 * 100:>14.2f}% | {hr_f * 100:>14.2f}%")
         print(f"{'Risk Reward':<15} | {rr_0:>15.4f} | {rr_f:>15.4f}")
         print(f"{'Profit Factor':<15} | {pr_0:>15.4f} | {pr_f:>15.4f}")
-        print(f"{'Trades':<15} | {str(tr_0):>15} | {str(tr_f):>15}")
+        tr_f_str = f"{tr_i} mod / {tr_f}" 
+
+        print(f"{'Trades':<15} | {str(tr_0):>15} | {tr_f_str:>15}")
         print(f"{'SQN':<15} | {sqn_0:>15.4f} | {sqn_f:>15.4f}")
         print(f"{'MAE':<15} | {mae_0:>15.5f} | {mae_f:>15.5f}")
         print("-" * 49 + "\n")
@@ -178,21 +182,33 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
 
 def f(initial_params: Tuple[float, ...], filter_params: Tuple[float, ...]) -> float:
     hr_0, rr_0, pr_0, tr_0, mae_0, sqn_0 = initial_params
-    hr_f, rr_f, pr_f, tr_f, mae_f, sqn_f = filter_params
 
+    hr_f, rr_f, pr_f, tr_f, mae_f, sqn_f, intervened, f_1, f_2 = filter_params
+    k = 5
+    
+    comb_fitness = -1/k * np.log(np.exp(-k*f_1) + np.exp(-k*f_2))
     eps = 1e-6
 
     q_base = f_single(hr_0, rr_0, pr_0, int(tr_0), sqn_0, mae_0)
-
     q_filtered = f_single(hr_f, rr_f, pr_f, int(tr_f), sqn_f, mae_f)
+
+    tr_0_safe = max(tr_0, 1.0)
+    intervention_ratio = intervened / tr_0_safe
+
+    gate_lower = 1.0 / (1.0 + np.exp(-40.0 * (intervention_ratio - 0.05)))
+
+    gate_upper = 1.0 / (1.0 + np.exp(40.0 * (intervention_ratio - 0.95)))
+
+    activity_gate = gate_lower * gate_upper
+
+    delta_pr = pr_f - pr_0
+    differentiation_reward = np.log1p(softplus(delta_pr, k=2.0))
 
     r_improvement = (q_filtered + eps) / (q_base + eps)
 
     d_hr = hr_f - hr_0
-    k_gate = 100.0
+    gate_hr = 1.0 / (1.0 + np.exp(-100.0 * d_hr))
 
-    gate_hr = 1.0 / (1.0 + np.exp(-k_gate * d_hr))
-
-    final_score = q_filtered * r_improvement * gate_hr
+    final_score = q_filtered * r_improvement * gate_hr * activity_gate * (1.0 + differentiation_reward) * comb_fitness
 
     return float(final_score)
