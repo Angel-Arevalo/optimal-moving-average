@@ -1,84 +1,36 @@
-from typing import Tuple, Dict, Callable, Optional, List
+from typing import Dict, Callable, Optional
 import pandas as pd
-from skopt.space import Real, Integer, Categorical
-
 import numpy as np
+import talib
 import keys
-from tester_dir import hit_ratio, risk_reward, profit_factor, mae, sqn
+from tester_dir import backtest
+from read_data import execution_prices
 
 
-def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: int, params_method: dict, short: bool, filter: bool) -> Tuple[float, float, float, float, float]:
-    cond_vector: pd.Series = DIR_METHODS[params_method["name"]](signals_and_prices, params_method)
+def dir_main(signals: pd.DataFrame, data: pd.DataFrame, params: dict, short: bool = False, filter: bool = False):
+    rev, tend = split_signals(signals, data, params, filter)
+    return backtest(rev, tend, data, short)
 
-    rever_tr, trend_tr = _split_signals_and_change(signals_and_prices, cond_vector, short, data, candle_ma)
 
-    if filter:
-        trend_tr = pd.DataFrame({"Signals": [], "Prices": []})
+def split_signals(signals: pd.DataFrame, data: pd.DataFrame, params: dict, filter: bool = False, condition=None) -> tuple:
+    if condition is None:
+        method = DIR_METHODS[params["name"]]
+        condition = method(signals, params)
+    rev, tend = _split_signals_and_change(signals, condition)
+    tend["Prices"] = execution_prices(tend["Signals"], data)
+    return rev, tend.iloc[:0] if filter else tend
 
-    hr = hit_ratio(rever_tr, trend_tr, short)
-    rr = risk_reward(rever_tr, trend_tr, short)
-    pr = profit_factor(rever_tr, trend_tr, short)
-    tr = len(rever_tr)//2 + len(trend_tr)//2
-    mae_val = mae(rever_tr, trend_tr, short, candle_ma)
-    return hr, rr, pr, tr, mae_val, sqn(rever_tr, trend_tr, short)
 
-def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond: pd.Series, short: bool, data: pd.DataFrame, 
-                              candle_ma: int, bid_df: pd.DataFrame = None, ask_df: pd.DataFrame = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def _split_signals_and_change(signals: pd.DataFrame, condition: pd.Series) -> tuple:
+    if signals.empty:
+        return signals.copy(), signals.copy()
+    entries = signals.index[::2]
+    flip = condition.reindex(entries, method="ffill").fillna(False).to_numpy(dtype=bool)
+    mask = np.repeat(flip, 2)
+    rev, tend = signals.loc[~mask].copy(), signals.loc[mask].copy()
+    tend["Signals"] *= -1
+    return rev, tend
 
-    entry_sig: int = -1 if short else 1
-
-    entrys = signals_and_prices[signals_and_prices["Signals"] == entry_sig]
-
-    if entrys.empty:
-        return None, None
-
-    entry_idx = entrys.index.to_numpy()
-    cond_idx = change_dir_cond.index.to_numpy()
-
-    pos = np.searchsorted(cond_idx, entry_idx, side="right") - 2
-    valid_mask = pos >= 0
-
-    cond_values = change_dir_cond.values
-    trade_flip_cond = np.where(valid_mask, cond_values[pos], False)
-
-    full_flip_mask = np.repeat(trade_flip_cond, 2)
-
-    df_reversion = signals_and_prices[~full_flip_mask].copy()
-
-    df_trend = signals_and_prices[full_flip_mask].copy()
-    df_trend["Signals"] = df_trend["Signals"] * -1
-
-    if not df_trend.empty:
-        if bid_df is not None and ask_df is not None:
-            ask_close = ask_df["close"]
-            bid_close = bid_df["close"]
-        else:
-            ask_close = keys.ask_cache[candle_ma]["close"]
-            bid_close = keys.bid_cache[candle_ma]["close"]
-
-        trend_idx = df_trend.index.to_numpy()
-
-        ask_idx = ask_close.index.to_numpy()
-        bid_idx = bid_close.index.to_numpy()
-
-        ask_pos = np.searchsorted(ask_idx, trend_idx, side="left") - 1
-        bid_pos = np.searchsorted(bid_idx, trend_idx, side="left") - 1
-
-        ask_valid = ask_pos >= 0
-        bid_valid = bid_pos >= 0
-
-        ask_vals = np.where(ask_valid, ask_close.to_numpy()[np.clip(ask_pos, 0, None)], np.nan)
-        bid_vals = np.where(bid_valid, bid_close.to_numpy()[np.clip(bid_pos, 0, None)], np.nan)
-
-        missing = ~(ask_valid & bid_valid) | np.isnan(ask_vals) | np.isnan(bid_vals)
-        if missing.any():
-            df_trend = df_trend[~missing].copy()
-            ask_vals = ask_vals[~missing]
-            bid_vals = bid_vals[~missing]
-
-        df_trend["Prices"] = np.where(df_trend["Signals"] == 1, ask_vals, bid_vals)
-
-    return df_reversion, df_trend
 
 DIR_METHODS: Dict[str, Callable[[dict], pd.Series]] = {}
 def _dir_methods(name: str) -> Callable[[Callable[[dict], pd.Series]], Callable[[dict], pd.Series]]:
@@ -89,12 +41,12 @@ def _dir_methods(name: str) -> Callable[[Callable[[dict], pd.Series]], Callable[
     return decorador
 
 @_dir_methods("KEF")
-def kaufman(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+def kaufman(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None, raw: bool = False) -> pd.Series:
     candle = params["candle"]
     window = params["window"]
     follow_tend = params["follow_tend"]
 
-    cache = data if data is not None else keys.mid_cache[candle]
+    cache = data if data is not None else keys.ohlc_cache[candle]
     mid_close: pd.Series = cache["close"]
 
     change: pd.Series = (mid_close - mid_close.shift(window)).abs()
@@ -102,23 +54,23 @@ def kaufman(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame]
     divisor = single_step_change.rolling(window=window).sum()
 
     kef: pd.Series = (change / divisor).replace([np.inf, -np.inf], np.nan).fillna(0)
-    return kef > follow_tend
+    return kef if raw else kef > follow_tend
 
 
 @_dir_methods("HURST")
-def H(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+def H(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None, raw: bool = False) -> pd.Series:
     candle = params["candle"]
     window = params["window"]
     follow_tend = params["follow_tend"]
 
-    cache = data if data is not None else keys.mid_cache[candle]
+    cache = data if data is not None else keys.ohlc_cache[candle]
     mid_close: pd.Series = cache["close"]
     values = mid_close.to_numpy(dtype=np.float64)
     n_obs = values.shape[0]
 
     result = np.full(n_obs, 0.5, dtype=np.float64)
 
-    if n_obs >= window:
+    if n_obs >= window and window > 2:
         price_windows = np.lib.stride_tricks.sliding_window_view(values, window)
         returns = np.diff(price_windows, axis=1)
 
@@ -139,17 +91,17 @@ def H(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = Non
         result[window - 1:] = hurst_vals
 
     hurst_series = pd.Series(result, index=mid_close.index)
-    return hurst_series > follow_tend
+    return hurst_series if raw else hurst_series > follow_tend
 
 
 @_dir_methods("LO_MACKINLAY")
-def lo_mackinlay(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+def lo_mackinlay(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None, raw: bool = False) -> pd.Series:
     candle = params["candle"]
     window = params["window"]
     k = params["k"]
     follow_tend = params["follow_tend"]
 
-    cache = data if data is not None else keys.mid_cache[candle]
+    cache = data if data is not None else keys.ohlc_cache[candle]
     mid_close: pd.Series = cache["close"]
 
     diff_1 = mid_close.diff(1)
@@ -158,49 +110,34 @@ def lo_mackinlay(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataF
     var_1 = diff_1.rolling(window=window).var()
     var_k = diff_k.rolling(window=window).var()
 
-    vr = (var_k / (k * var_1)).replace([np.inf, -np.inf], np.nan).fillna(1.0)
-    return vr > follow_tend
+    vr = (var_k / (k * var_1)).replace([np.inf, -np.inf], np.nan)
+    return vr if raw else vr > follow_tend
 
 
 @_dir_methods("ADX")
-def adx(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+def adx(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None, raw: bool = False) -> pd.Series:
     candle = params["candle"]
     window = params["window"]
     follow_tend = params["follow_tend"]
 
-    cache = data if data is not None else keys.mid_cache[candle]
+    cache = data if data is not None else keys.ohlc_cache[candle]
     high: pd.Series = cache["high"]
     low: pd.Series = cache["low"]
     close: pd.Series = cache["close"]
 
-    up_move = high.diff(1)
-    down_move = -low.diff(1)
+    adx_series = pd.Series(talib.ADX(high.to_numpy(float), low.to_numpy(float),
+                                    close.to_numpy(float), timeperiod=window), index=close.index).fillna(0)
 
-    plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
-    minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
-
-    tr1 = high - low
-    tr2 = (high - close.shift(1)).abs()
-    tr3 = (low - close.shift(1)).abs()
-    tr = np.fmax(np.fmax(tr1, tr2), tr3)
-
-    atr_val = tr.ewm(span=window, adjust=False).mean()
-    plus_di = 100 * pd.Series(plus_dm, index=close.index).ewm(span=window, adjust=False).mean() / atr_val
-    minus_di = 100 * pd.Series(minus_dm, index=close.index).ewm(span=window, adjust=False).mean() / atr_val
-
-    dx = (100 * (plus_di - minus_di).abs() / (plus_di + minus_di)).replace([np.inf, -np.inf], np.nan)
-    adx_series = dx.ewm(span=window, adjust=False).mean().fillna(0)
-
-    return adx_series > follow_tend
+    return adx_series if raw else adx_series > follow_tend
 
 
 @_dir_methods("VOL_RATIO")
-def volatility_ratio(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+def volatility_ratio(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None, raw: bool = False) -> pd.Series:
     candle = params["candle"]
     window = params["window"]
     follow_tend = params["follow_tend"]
 
-    cache = data if data is not None else keys.mid_cache[candle]
+    cache = data if data is not None else keys.ohlc_cache[candle]
     high: pd.Series = cache["high"]
     low: pd.Series = cache["low"]
     close: pd.Series = cache["close"]
@@ -216,17 +153,17 @@ def volatility_ratio(df_signals: pd.DataFrame, params: dict, data: Optional[pd.D
     atr_pct = tr.rolling(window=window).mean() / sma
 
     v_ratio = (bbw / (2 * atr_pct)).replace([np.inf, -np.inf], np.nan).fillna(0)
-    return v_ratio > follow_tend
+    return v_ratio if raw else v_ratio > follow_tend
 
 
 @_dir_methods("SHANNON")
-def shannon_entropy(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+def shannon_entropy(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None, raw: bool = False) -> pd.Series:
     candle = params["candle"]
     window = params["window"]
     bins = params["bins"]
     follow_tend = params["follow_tend"]
 
-    cache = data if data is not None else keys.mid_cache[candle]
+    cache = data if data is not None else keys.ohlc_cache[candle]
     mid_close: pd.Series = cache["close"]
     values = mid_close.to_numpy(dtype=np.float64)
     n_obs = values.shape[0]
@@ -264,17 +201,17 @@ def shannon_entropy(df_signals: pd.DataFrame, params: dict, data: Optional[pd.Da
         result[window - 1:] = entropy_vals
 
     entropy = pd.Series(result, index=mid_close.index)
-    return entropy < follow_tend
+    return entropy if raw else entropy < follow_tend
 
 
 @_dir_methods("ATR_EXPANSION")
-def atr_expansion(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+def atr_expansion(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None, raw: bool = False) -> pd.Series:
     candle = params["candle"]
     window = params["window"]
     lookback_ma = params["lookback_ma"]
     follow_tend = params["follow_tend"]
 
-    cache = data if data is not None else keys.mid_cache[candle]
+    cache = data if data is not None else keys.ohlc_cache[candle]
     high: pd.Series = cache["high"]
     low: pd.Series = cache["low"]
     close: pd.Series = cache["close"]
@@ -288,16 +225,16 @@ def atr_expansion(df_signals: pd.DataFrame, params: dict, data: Optional[pd.Data
     atr_ma = atr.rolling(window=lookback_ma).mean()
 
     atr_ratio = (atr / atr_ma).replace([np.inf, -np.inf], np.nan).fillna(0)
-    return atr_ratio > follow_tend
+    return atr_ratio if raw else atr_ratio > follow_tend
 
 
 @_dir_methods("KELTNER_BREAKOUT")
-def keltner_breakout(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+def keltner_breakout(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None, raw: bool = False) -> pd.Series:
     candle = params["candle"]
     window = params["window"]
     mult = params["mult"]
 
-    cache = data if data is not None else keys.mid_cache[candle]
+    cache = data if data is not None else keys.ohlc_cache[candle]
     high: pd.Series = cache["high"]
     low: pd.Series = cache["low"]
     close: pd.Series = cache["close"]
@@ -315,71 +252,3 @@ def keltner_breakout(df_signals: pd.DataFrame, params: dict, data: Optional[pd.D
 
     is_breakout = (close > upper) | (close < lower)
     return is_breakout.fillna(False)
-
-
-
-def compute_wilson_hr(wins: int, total_trades: int, z: float = 1.645) -> float:
-    if total_trades <= 0:
-        return 0.0
-    p = wins / total_trades
-    n = total_trades
-    numerator = p + (z**2) / (2 * n) - z * np.sqrt((p * (1 - p) + (z**2) / (4 * n)) / n)
-    denominator = 1 + (z**2) / n
-    return float(max(0.0, numerator / denominator))
-
-def f_empirical_bayes(
-    hr: float,
-    rr: float,
-    pr: float,
-    tr: int,
-    sqn: float,
-    mae: float,
-    completed_scores: List[float],
-    pnl_vector: Optional[np.ndarray] = None
-) -> float:
-
-    if tr <= 0:
-        return 0.0
-
-    wins = int(round(hr * tr))
-    hr_eb = compute_wilson_hr(wins, tr)
-
-    rr_safe = max(rr, 0.01)
-    rr_compressed = 3.5 * np.tanh(rr_safe / 3.5)
-
-    e_stab = (hr_eb * np.log1p(rr_compressed)) - (1.0 - hr_eb)
-    g_e = float(np.log1p(np.exp(10.0 * e_stab)) / 10.0)
-
-    hr_safe = np.clip(hr_eb, 0.01, 0.99)
-    p_balance = np.sqrt(hr_safe / (1.0 - hr_safe))
-
-    pr_safe = max(pr, 0.01)
-    pr_compressed = 5.0 * np.tanh(pr_safe / 5.0)
-    s_pr = float(np.log1p(np.log1p(np.exp(5.0 * (pr_compressed - 1.0))) / 5.0))
-
-    sqn_pos = float(np.log1p(np.exp(max(sqn, 0.0))))
-    s_sqn = 5.0 * np.tanh(sqn_pos / 5.0)
-
-    mae_delta = float(np.log1p(np.exp(4.0 * (mae - 0.50))) / 4.0)
-    eta_mae = float(np.exp(-0.15 * mae_delta))
-
-    raw_score = g_e * p_balance * s_pr * (1.0 + 0.25 * s_sqn) * eta_mae
-
-
-    if pnl_vector is not None and len(pnl_vector) > 1:
-        sigma_i_sq = float(np.var(pnl_vector, ddof=1) / tr)
-    else:
-
-        sigma_i_sq = 1.0 / np.sqrt(tr)
-
-    if len(completed_scores) >= 5:
-        mu_global = float(np.mean(completed_scores))
-        tau_sq = float(np.var(completed_scores, ddof=1))
-
-        b_i = sigma_i_sq / (sigma_i_sq + tau_sq + 1e-8)
-        b_i = np.clip(b_i, 0.0, 0.95)
-        adjusted_score = (1.0 - b_i) * raw_score + b_i * mu_global
-    else:
-        adjusted_score = raw_score * (1.0 - (1.0 / np.sqrt(tr + 1)))
-
-    return float(max(0.0, adjusted_score))

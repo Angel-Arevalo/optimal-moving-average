@@ -1,227 +1,131 @@
-from typing import List, Tuple, Dict, Any
-import copy
+from numbers import Integral
 import numpy as np
 import optuna
-import pandas as pd
-
-from direction_methods import dir_main
 import keys
-
+from direction_methods import dir_main, DIR_METHODS
+from find_best import score
+from use_tecnics import generate
 from tester import backtest
-from find_best import f
-from use_tecnics import main
-
-dir_methods = [
-    "KEF",
-    "HURST",
-    "LO_MACKINLAY",
-    "ADX",
-    "VOL_RATIO",
-    "SHANNON",
-    "ATR_EXPANSION",
-    "KELTNER_BREAKOUT",
-]
-
-optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 
-def make_cache_key(ma_method: str, ma_candle: int, ma_lookback: int, params: dict, filter_val: bool) -> tuple:
-    sorted_params = tuple(sorted((k, v) for k, v in params.items()))
-    return (ma_method, ma_candle, ma_lookback, filter_val, sorted_params)
+dir_methods = list(DIR_METHODS)
+THRESHOLDS = {"KEF": (.1, 1.), "HURST": (.5, 1.), "LO_MACKINLAY": (.5, 3.),
+              "ADX": (10., 40.), "VOL_RATIO": (.5, 3.), "SHANNON": (.3, 1.), "ATR_EXPANSION": (1., 3.)}
 
 
-def generate_deterministic_neighbors(base_params: dict) -> list[dict]:
-    neighbors = [base_params]
+def improvement_objective(base_fitness: float, final_fitness: float, improvement_weight: float = 0.75) -> tuple[float, float]:
+    """Combine final quality with signed normalized gain, and return that gain.
 
-    OFFSETS = [
-        {"int": 1, "float": 0.05},
-        {"int": -1, "float": -0.05},
-        {"int": 2, "float": 0.10},
-        {"int": -2, "float": -0.10},
-        {"int": 1, "float": -0.05},
-        {"int": -1, "float": 0.05},
-        {"int": 3, "float": 0.15},
-        {"int": -3, "float": -0.15},
-    ]
+    The gain lies in [-1, 1]. It is not a percentage return or a significance test.
+    """
+    if not np.isfinite(improvement_weight) or not 0 <= improvement_weight <= 1:
+        raise ValueError("improvement_weight debe estar entre 0 y 1")
+    if not np.isfinite([base_fitness, final_fitness]).all() or min(base_fitness, final_fitness) < 0:
+        raise ValueError("Los fitness deben ser finitos y no negativos")
+    scale = max(base_fitness, final_fitness)
+    if scale == 0:
+        return 0.0, 0.0
+    base, final = base_fitness / scale, final_fitness / scale
+    gain = (final - base) / (final + base)
+    factor = (1.0 - improvement_weight) + improvement_weight * gain
+    return float(final_fitness * factor), float(gain)
 
-    BOUNDS = {
-        "candle": (1, 100, int),
-        "window": (2, 100, int),
-        "follow_tend": (0.01, 50.0, float),
-        "k": (2, 10, int),
-        "bins": (5, 20, int),
-        "lookback_ma": (20, 100, int),
-        "mult": (1.0, 4.0, float),
-    }
 
-    for offset in OFFSETS:
-        neighbor = copy.deepcopy(base_params)
-        for key, val in base_params.items():
-            if key in BOUNDS:
-                min_v, max_v, v_type = BOUNDS[key]
-                if v_type == int:
-                    new_val = int(np.clip(val + offset["int"], min_v, max_v))
-                else:
-                    new_val = float(np.clip(val * (1.0 + offset["float"]), min_v, max_v))
-                neighbor[key] = new_val
-        neighbors.append(neighbor)
+def make_cache_key(method: str, candle: int, lookback: int, params: dict, filter_val: bool) -> tuple:
+    return method, candle, lookback, filter_val, tuple(sorted(params.items()))
 
+
+def generate_deterministic_neighbors(params: dict) -> list[dict]:
+    bounds = {"candle": (keys.candles_min, keys.candles, int), "window": (2, 100, int),
+              "follow_tend": (0.01, 50.0, float), "k": (2, 10, int), "bins": (5, 20, int),
+              "lookback_ma": (20, 100, int), "mult": (1.0, 4.0, float)}
+    if params["name"] in THRESHOLDS:
+        bounds["follow_tend"] = (*THRESHOLDS[params["name"]], float)
+    neighbors = [params.copy()]
+    for step, delta in [(1, .05), (-1, -.05), (2, .10), (-2, -.10), (1, -.05), (-1, .05), (3, .15), (-3, -.15)]:
+        config = params.copy()
+        for key, value in params.items():
+            if key in bounds:
+                low, high, dtype = bounds[key]
+                value = value + step if dtype is int else value * (1 + delta)
+                config[key] = dtype(np.clip(value, low, high))
+        neighbors.append(config)
     return neighbors
 
 
-def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, filter: bool = False, n_trials: int = 100) -> Tuple:
-    keys.bid_cache = {}
-    keys.ask_cache = {}
-    keys.mid_cache = {}
+def suggest_params(trial: optuna.Trial) -> dict:
+    name = trial.suggest_categorical("name", dir_methods)
+    params = {"name": name, "candle": trial.suggest_int("candle", keys.candles_min, keys.candles),
+              "window": trial.suggest_int("window", 2, 100)}
+    thresholds = THRESHOLDS
+    extras = {"LO_MACKINLAY": ("k", 2, 10), "SHANNON": ("bins", 5, 20), "ATR_EXPANSION": ("lookback_ma", 20, 100)}
+    if name in thresholds:
+        params["follow_tend"] = trial.suggest_float("follow_tend", *thresholds[name])
+    if name in extras:
+        key, low, high = extras[name]
+        params[key] = trial.suggest_int(key, low, high)
+    if name == "KELTNER_BREAKOUT":
+        params["mult"] = trial.suggest_float("mult", 1., 4.)
+    return params
 
-    keys.fill_ohlc_dict(asset)
 
-    completed_scores: List[float] = []
-
-    score_cache: Dict[tuple, tuple] = {}
+def opti_dir(data, verbose: bool = True, shorts: bool = False, filter: bool = False, n_trials: int = 100, asset: str = None, ma_seed: list = None, improvement_weight: float = 0.75) -> tuple:
+    if isinstance(n_trials, bool) or not isinstance(n_trials, Integral) or n_trials < 1:
+        raise ValueError("n_trials debe ser un entero positivo")
+    if filter is not None and not isinstance(filter, bool):
+        raise ValueError("filter debe ser True, False o None")
+    improvement_objective(0., 0., improvement_weight)
+    df = keys.fill_ohlc_dict(data, asset)
+    cache = {}
+    base_cache = {}
 
     def objective(trial: optuna.Trial) -> float:
-        ma_method = trial.suggest_categorical(
-            "ma_method", list(keys.methods)
-        )
-        ma_candle = trial.suggest_int(
-            "ma_candle", keys.candles_min, keys.candles
-        )
-        ma_lookback = trial.suggest_int(
-            "ma_lookback", keys.lookbacks_min, keys.lookbacks
-        )
+        method = trial.suggest_categorical("ma_method", sorted(keys.methods))
+        candle = trial.suggest_int("ma_candle", keys.candles_min, keys.candles)
+        lookback = trial.suggest_int("ma_lookback", keys.lookbacks_min, keys.lookbacks)
+        ma_key = method, candle, lookback
+        if ma_key not in base_cache:
+            signals = generate(method, lookback, candle, shorts)
+            base_metrics = backtest(signals, df, shorts)
+            base_cache[ma_key] = signals, base_metrics, score(base_metrics)
+        signals, base_metrics, base_fitness = base_cache[ma_key]
+        params = suggest_params(trial)
+        filtered = trial.suggest_categorical("filter", [False, True]) if filter is None else filter
+        scores = []
+        for i, config in enumerate(generate_deterministic_neighbors(params)):
+            key = make_cache_key(method, candle, lookback, config, filtered)
+            if key not in cache:
+                metrics = dir_main(signals, df, config, shorts, filtered)
+                cache[key] = score(metrics), metrics
+            value, metrics = cache[key]
+            combined, gain = improvement_objective(base_fitness, value, improvement_weight)
+            scores.append(combined)
+            if i == 0:
+                trial.set_user_attr("improvement_weight", improvement_weight)
+                trial.set_user_attr("base_fitness", base_fitness)
+                trial.set_user_attr("final_fitness", value)
+                trial.set_user_attr("fitness_gain", value - base_fitness)
+                trial.set_user_attr("improvement_factor", gain)
+                trial.set_user_attr("combined_fitness", combined)
+                trial.set_user_attr("improved", value > base_fitness)
+                for name, metric in base_metrics._asdict().items():
+                    trial.set_user_attr("base_" + name, metric)
+                for name, metric in metrics._asdict().items():
+                    trial.set_user_attr(name, metric)
+        std = float(np.std(scores))
+        trial.set_user_attr("std_score", std)
+        return -(float(np.mean(scores)) - 1.5 * std)
 
-        ohlc: pd.DataFrame = keys.mid_cache[ma_candle]["close"]
-        signals_prices: pd.DataFrame = main(
-            ma_method, ohlc, ma_lookback, ma_candle, asset, shorts
-        )
-
-        dir_method = trial.suggest_categorical("name", dir_methods)
-
-        dir_candle = trial.suggest_int("candle", 1, 100)
-        dir_window = trial.suggest_int("window", 2, 100)
-
-        params = {
-            "name": dir_method,
-            "candle": dir_candle,
-            "window": dir_window,
-        }
-
-        if dir_method == "KEF":
-            params["follow_tend"] = trial.suggest_float("follow_tend", 0.1, 1.0)
-        elif dir_method == "HURST":
-            params["follow_tend"] = trial.suggest_float("follow_tend", 0.5, 1.0)
-        elif dir_method == "LO_MACKINLAY":
-            params["k"] = trial.suggest_int("k", 2, 10)
-            params["follow_tend"] = trial.suggest_float(
-                "follow_tend", 0.5, 3.0
-            )
-        elif dir_method == "ADX":
-            params["follow_tend"] = trial.suggest_float(
-                "follow_tend", 10.0, 40.0
-            )
-        elif dir_method == "VOL_RATIO":
-            params["follow_tend"] = trial.suggest_float(
-                "follow_tend", 0.5, 3.0
-            )
-        elif dir_method == "SHANNON":
-            params["bins"] = trial.suggest_int("bins", 5, 20)
-            params["follow_tend"] = trial.suggest_float(
-                "follow_tend", 0.3, 1.0
-            )
-        elif dir_method == "ATR_EXPANSION":
-            params["lookback_ma"] = trial.suggest_int("lookback_ma", 20, 100)
-            params["follow_tend"] = trial.suggest_float(
-                "follow_tend", 1.0, 3.0
-            )
-        elif dir_method == "KELTNER_BREAKOUT":
-            params["mult"] = trial.suggest_float("mult", 1.0, 4.0)
-
-        neighbor_configs = generate_deterministic_neighbors(params)
-        neighbor_scores = []
-        center_metrics = None
-
-        for idx, p_config in enumerate(neighbor_configs):
-            cache_key = make_cache_key(ma_method, ma_candle, ma_lookback, p_config, filter)
-
-            if cache_key in score_cache:
-                eb_score, hr_v, rr_v, pr_v, tr_v, mae_v, sqn_v = score_cache[cache_key]
-            else:
-                res_dir = dir_main(
-                    signals_prices, asset, ma_candle, p_config, shorts, filter
-                )
-
-                if len(res_dir) == 7:
-                    hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir, _ = res_dir
-                else:
-                    hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir = res_dir
-
-                eb_score = f(
-                    hr=hr_dir,
-                    rr=rr_dir,
-                    pr=pr_dir,
-                    tr=tr_dir,
-                    sqn=sqn_dir,
-                    mae=mae_dir,
-                )
-
-                score_cache[cache_key] = (eb_score, hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir)
-                hr_v, rr_v, pr_v, tr_v, mae_v, sqn_v = hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir
-
-            neighbor_scores.append(eb_score)
-
-            if idx == 0:
-                center_metrics = (hr_v, rr_v, pr_v, tr_v, mae_v, sqn_v)
-
-        mean_score = float(np.mean(neighbor_scores))
-        std_score = float(np.std(neighbor_scores))
-
-        p_score = mean_score - 1.5 * std_score
-
-        completed_scores.append(p_score)
-
-        hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir = center_metrics
-        trial.set_user_attr("hr", hr_dir)
-        trial.set_user_attr("rr", rr_dir)
-        trial.set_user_attr("pr", pr_dir)
-        trial.set_user_attr("tr", tr_dir)
-        trial.set_user_attr("mae", mae_dir)
-        trial.set_user_attr("sqn", sqn_dir)
-        trial.set_user_attr("p_score", p_score)
-        trial.set_user_attr("std_score", std_score)
-
-        return -p_score
-
-    study = optuna.create_study(
-        direction="minimize",
-        sampler=optuna.samplers.TPESampler(),
-    )
-
+    study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler(seed=42))
+    if ma_seed is not None:
+        method, candle, lookback = ma_seed
+        for name in dir_methods:
+            study.enqueue_trial({"ma_method": method, "ma_candle": candle, "ma_lookback": lookback, "name": name})
     study.optimize(objective, n_trials=n_trials)
-
-    best_trial = study.best_trial
-
-    best_params: Dict[str, Any] = best_trial.params
-    best_metrics: Dict[str, float] = {
-        "score": -best_trial.value,
-        "hr": best_trial.user_attrs.get("hr"),
-        "rr": best_trial.user_attrs.get("rr"),
-        "pr": best_trial.user_attrs.get("pr"),
-        "tr": best_trial.user_attrs.get("tr"),
-        "mae": best_trial.user_attrs.get("mae"),
-        "sqn": best_trial.user_attrs.get("sqn"),
-        "std_score": best_trial.user_attrs.get("std_score"),
-    }
-
+    best = study.best_trial
+    metrics = {"score": -best.value, **best.user_attrs}
     if verbose:
-        print(f"Método de Dirección: {best_params.get('name')}, Datos optimizados {best_params}")
-        print(f"\nhit ratio: {best_metrics['hr']}")
-        print(f"risk reward: {best_metrics['rr']}")
-        print(f"profit factor: {best_metrics['pr']}")
-        print(f"trades: {best_metrics['tr']}")
-        print(f"Resultado de estabilidad de Meseta (P-Score): {best_metrics['score']:.4f}")
-        print(f"Desviación Estándar del Disco (Inestabilidad): {best_metrics['std_score']:.4f}")
-        print(f"Mae: {best_metrics['mae']}")
-        print(f"Operando {'cortos' if shorts else 'largos'}\n")
-
-    return best_params, best_metrics
+        print(f"Método y parámetros: {best.params}")
+        print(metrics)
+        print(f"Operando {'cortos' if shorts else 'largos'}")
+    return best.params, metrics

@@ -1,44 +1,34 @@
+from numbers import Integral
 import talib
 import pandas as pd
-import numpy as np
 from typing import Dict, Callable
 from tester import get_vector_buys
-
+from read_data import ohlc_form, execution_prices
 import keys
+
 
 avalible_methods: set = {"SMA", "EMA", "WMA", "DEMA", "TEMA", "TRIMA", "KAMA", "T3", "MIDPOINT"}
 
-# actualmente este método va a retornar el vector de compras y ventas
-# De ahora en adelanta se asume que data ya es el vector de información
-# final
-def main(method: str, data: pd.Series, lookback: int, candle: int, nooh_data: pd.DataFrame, shorts: bool = False, bid_df: pd.DataFrame = None, ask_df: pd.DataFrame = None) -> pd.DataFrame:
 
+def main(method: str, data, lookback: int, candle: int = 1, shorts: bool = False, asset: str = None, temporality: str = "auto", origin="epoch") -> pd.DataFrame:
+    return signals_from(method, ohlc_form(data, candle, temporality, asset, origin), lookback, shorts)
+
+
+def generate(method: str, lookback: int, candle: int = 1, shorts: bool = False) -> pd.DataFrame:
+    return signals_from(method, keys.ohlc_cache[candle], lookback, shorts)
+
+
+def signals_from(method: str, df: pd.DataFrame, lookback: int, shorts: bool = False) -> pd.DataFrame:
+    if isinstance(lookback, bool) or not isinstance(lookback, Integral) or lookback < 2:
+        raise ValueError("El período de la media debe ser un entero mayor o igual a 2")
     if method not in avalible_methods:
-        raise ValueError("Not avalible method")
+        raise ValueError("Método no disponible")
+    close = df["close"]
+    ma = SIMPLE_METHODS[method](close, lookback) if len(df) else close
+    signals = get_vector_buys(ma, close, shorts, df.get("is_liquid"))
+    return pd.DataFrame({"Signals": signals, "Prices": execution_prices(signals, df)})
 
-    ma: pd.Series = SIMPLE_METHODS[method](data, lookback)
-    ma = get_vector_buys(ma, data, nooh_data, shorts)
 
-    if bid_df is not None and ask_df is not None:
-        ask_close = ask_df["close"]
-        bid_close = bid_df["close"]
-    else:
-        ask_close = keys.ask_cache[candle]["close"]
-        bid_close = keys.bid_cache[candle]["close"]
-
-    precios = np.where(ma == 1, ask_close.loc[ma.index], bid_close.loc[ma.index])
-
-    ma = pd.DataFrame({
-        "Signals": ma,
-        "Prices": precios
-    }, index=ma.index)
-
-    return ma
-# Esta función me permite guardar una correspondencia entre
-# Strings y funciones de TAB-Lib 
-
-# La idea es que se usa el decorador @_all_methods("str") y justo debajo
-# una función que retorne la función deseada.
 SIMPLE_METHODS: Dict[str, Callable[[pd.Series, int], pd.Series]] = {}
 def _all_methods(name: str) -> Callable[[pd.Series, int], pd.Series]:
     def decorador(func: Callable[[pd.Series, int], pd.Series]) -> Callable[[pd.Series, int], pd.Series]:

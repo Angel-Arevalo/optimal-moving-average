@@ -1,33 +1,37 @@
-from use_tecnics import avalible_methods
+from numbers import Integral
+import pandas as pd
 import read_data
-from typing import Union
-#Temporalidad de particionado
-temp: str = "min"
 
-# llaves para las llamadas del optimizador
+
+temp: str = "auto"
+origin: str = "epoch"
 calls: int = 60
 initial_points: int = 20
-
-
-# llaves (básicas) para el espacio de búsqueda
 lookbacks: int = 110
 lookbacks_min: int = 2
-
-candles: int = 120
+candles: int = 1
 candles_min: int = 1
+methods: set[str] = {"SMA", "EMA", "WMA", "DEMA", "TEMA", "TRIMA", "KAMA", "T3", "MIDPOINT"}
+ohlc_cache: dict = {}
 
-methods: set[str] = avalible_methods
 
-# pre-calculo de ohlc
-bid_cache: dict = {}
-ask_cache: dict = {}
-mid_cache: dict = {}
+def validate_space() -> None:
+    for value in (lookbacks_min, lookbacks, candles_min, candles):
+        if isinstance(value, bool) or not isinstance(value, Integral):
+            raise ValueError("Los límites de búsqueda deben ser enteros")
+    if lookbacks_min < 2 or lookbacks < lookbacks_min:
+        raise ValueError("Espacio de búsqueda inválido para lookback")
+    if candles_min < 1 or candles < candles_min:
+        raise ValueError("Espacio de búsqueda inválido para sesiones")
+    from use_tecnics import avalible_methods
+    if not methods or not set(methods).issubset(avalible_methods):
+        raise ValueError("Seleccione medias móviles disponibles")
 
-def fill_ohlc_dict(data) -> None:
-    bid_cache.clear()
-    ask_cache.clear()
-    mid_cache.clear()
-    data_ = data.copy()
 
-    for i in range(1, candles+1):
-        bid_cache[i], ask_cache[i], mid_cache[i] = read_data.ohlc_form(data_, i, temp)
+def fill_ohlc_dict(data, asset: str = None, requested=None) -> pd.DataFrame:
+    validate_space()
+    df = read_data.read_asset(data, asset)
+    ohlc_cache.clear()
+    for candle in sorted(set(range(candles_min, candles + 1) if requested is None else requested)):
+        ohlc_cache[candle] = read_data.resample_asset(df, candle, temp, origin)
+    return df

@@ -1,62 +1,31 @@
 from skopt import gp_minimize, forest_minimize
-from skopt.space import Real, Integer, Categorical
-import pandas as pd
-
-from read_data import ohlc_form, read_asset
-from use_tecnics import main, avalible_methods
-from tester import backtest
-
-from numpy import exp, log, sqrt
-from typing import Union, Callable
+from skopt.space import Integer, Categorical
+from typing import Callable
 import numpy as np
-
 import keys
-import warnings
-warnings.filterwarnings("ignore")
+from use_tecnics import generate
+from tester import backtest, Metrics
 
 
-def opti_main(data: Union[pd.DataFrame, str], verbose: bool = True, engie: str = "gp", shorts: bool = False) -> list:
-    print(keys.calls)
+def score(metrics: Metrics) -> float:
+    return f(**metrics._asdict())
 
-    keys.pre_ohlc = {}
-    keys.fill_ohlc_dict(data)
 
-    space: list = make_search_space()
+def opti_main(data, verbose: bool = True, engie: str = "gp", shorts: bool = False, asset: str = None) -> list:
+    df = keys.fill_ohlc_dict(data, asset)
+    space = make_search_space()
 
-    def objective(param: list, kpis: bool = True) -> float:
-        method = param[0]
-        print(method, param)
+    def evaluate(params: list) -> Metrics:
+        method, candle, lookback = params
+        return backtest(generate(method, lookback, candle, shorts), df, shorts)
 
-        ohlc: pd.DataFrame = keys.mid_cache[param[1]]["close"]
-
-        signals_prices: pd.DataFrame = main(method, ohlc, param[2], param[1], data, shorts)
-
-        if shorts:
-            hr, rr, pr, tr, mae, sqn = backtest(signals_prices, keys.bid_cache[param[1]]["high"], True, shorts)
-        else:
-            hr, rr, pr, tr, mae, sqn = backtest(signals_prices, keys.ask_cache[param[1]]["low"], True, shorts)
-
-        if kpis:
-            return -f(hr, rr, pr, tr, sqn, mae)
-
-        return (sqn, hr, rr, pr, tr, mae)
-
-    print("optimizando")
-    result: list = optimizer(objective, space, engie)
-
-    best_result = result
-    b_score, b_ht, b_rr, b_pr, b_trades, b_mae = objective(result, False)
-    b_met = result[0]
-
+    result = optimizer(lambda params: -score(evaluate(params)), space, engie)
     if verbose:
-        #print(f'Resultado obtenido entrenando desde {data.index[0].strftime("%Y-%m-%d")} hasta {data.index[-1].strftime("%Y-%m-%d")}')
-        print(f"Método: {b_met}, Datos optimizados {best_result}")
-        print(f"\nhit ratio: {b_ht}\nrisk reward: {b_rr}\nprofit factor: {b_pr}\ntrades: {b_trades}")
-        print(f"Resultado de estabilidad {b_score}")
-        print(f"Mae {b_mae}")
-        print(f"Operando {"cortos" if shorts else "largos"}" )
+        print(f"Método y parámetros: {result}")
+        print(evaluate(result)._asdict())
+        print(f"Operando {'cortos' if shorts else 'largos'}")
+    return result
 
-    return best_result
 
 def softplus(x: float, k: float = 1.0) -> float:
     kx = k * x
@@ -94,54 +63,20 @@ def f(
 
     return float(fitness_score)
 
-def optimizer(objective: Callable, space: list, engie: str = "gp") -> tuple:
-    if engie == "gp":
-        result = gp_minimize(
-                    func=objective,
-                    dimensions=space,
-                    n_calls=keys.calls,
-                    n_initial_points=10,
-                    random_state=42,
-                )
-
-    elif engie == "fm":
-        result = forest_minimize(
-                    func=objective,
-                    dimensions=space,
-                    n_calls=keys.calls,
-                    n_initial_points=10,
-                    random_state=None,
-                    verbose=False
-                 )
-
-    else:
-        raise ValueError(f"No se reconoce {engie} como Motor")
-
-    return result.x
+def optimizer(objective: Callable, space: list, engie: str = "gp") -> list:
+    engines = {"gp": gp_minimize, "fm": forest_minimize}
+    if engie not in engines:
+        raise ValueError(f"No se reconoce {engie} como motor")
+    if keys.calls < 1 or keys.initial_points < 1:
+        raise ValueError("calls e initial_points deben ser positivos")
+    options = {"n_calls": keys.calls, "n_initial_points": min(keys.initial_points, keys.calls), "random_state": 42}
+    return engines[engie](objective, space, **options).x
 
 
 def make_search_space() -> list:
-    search_space: list = []
-
-    search_space.append(Categorical(list(keys.methods), name="name"))
-
-    if keys.lookbacks_min < 2:
-        raise ValueError("Espacio pequeño de vista hacia atras")
-
-    if keys.lookbacks < keys.lookbacks_min:
-        raise ValueError("Espacio de búsqueda inválido para lookback (min > max)")
-
-    if keys.candles < keys.candles_min:
-        raise ValueError("Espacio de búsqueda inválido para vela (min > max)")
-
-    if keys.candles_min == keys.candles:
-        search_space.append(Categorical([keys.candles_min], name="candle"))
-    else:
-        search_space.append(Integer(keys.candles_min, keys.candles, name="candle"))
-
-    if keys.lookbacks_min == keys.lookbacks:
-        search_space.append(Categorical([keys.lookbacks_min], name="lookback"))
-    else:
-        search_space.append(Integer(keys.lookbacks_min, keys.lookbacks, name="lookback"))
-
-    return search_space
+    keys.validate_space()
+    def dimension(low, high, name):
+        return Categorical([low], name=name) if low == high else Integer(low, high, name=name)
+    return [Categorical(sorted(keys.methods), name="name"),
+            dimension(keys.candles_min, keys.candles, "candle"),
+            dimension(keys.lookbacks_min, keys.lookbacks, "lookback")]

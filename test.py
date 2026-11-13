@@ -1,38 +1,29 @@
-from datetime import datetime, timezone
-import MetaTrader5 as mt5
-import pandas as pd
-import read_data
+import argparse
+from find_best import opti_main
+from find_best_dir import opti_dir
 import keys
-import find_best
-import direction_methods
-import use_tecnics
-import tester_dir
-import tester 
-import find_best_dir
 
-mt5.initialize()
 
-symbol = "EURUSD_"
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("data")
+    parser.add_argument("--asset")
+    parser.add_argument("--shorts", action="store_true")
+    parser.add_argument("--direction", action="store_true")
+    parser.add_argument("--filter", action="store_true")
+    parser.add_argument("--improvement-weight", type=float, default=.75)
+    parser.add_argument("--calls", type=int, default=60)
+    parser.add_argument("--sessions", type=int, default=1)
+    parser.add_argument("--temporality", choices=["auto", "min", "h", "d"], default="auto")
+    args = parser.parse_args()
+    keys.calls, keys.candles = args.calls, args.sessions
+    keys.temp = args.temporality
+    options = {"asset": args.asset, "shorts": args.shorts}
+    if args.direction:
+        print(opti_dir(args.data, n_trials=args.calls, filter=args.filter, improvement_weight=args.improvement_weight, **options))
+    else:
+        print(opti_main(args.data, **options))
 
-symbol_info = mt5.symbol_info(symbol)
-if symbol_info is None:
-    mt5.shutdown()
-    raise ValueError(f"No se encontró el símbolo {symbol}")
 
-point = symbol_info.point
-
-utc_from = datetime(2024, 1, 8, 0, 0, tzinfo=timezone.utc)
-utc_to = datetime(2026, 8, 21, 23, 59, tzinfo=timezone.utc)
-
-rates = mt5.copy_rates_range(symbol, mt5.TIMEFRAME_M1, utc_from, utc_to)
-mt5.shutdown()
-
-df = pd.DataFrame(rates)
-df["time"] = pd.to_datetime(df["time"], unit="s")
-
-df = df.rename(columns={"close": "bid"})
-df["ask"] = df["bid"] + (df["spread"] * point)
-
-df_result = df[["time", "bid", "ask"]].set_index("time")
-print("Optimizando")
-print(find_best.opti_main(df_result, True, "fm", True))
+if __name__ == "__main__":
+    main()

@@ -6,3 +6,6 @@ __pycache__/
 *.pyd
 *.csv
 Imagenes/
+
+opt/
+.venv/
