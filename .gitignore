@@ -1,11 +1,14 @@
-Data/
-__pycache__/
-.ipynb_checkpoints/
-*.pyc 
-*.pyo
-*.pyd
-*.csv
-Imagenes/
-
-opt/
-.venv/
+# Ignorar todo excepto los archivos de optimización indicados.
+/*
+!/.gitignore
+!/README.md
+!/direction_methods.py
+!/find_best.py
+!/find_best_dir.py
+!/keys.py
+!/read_data.py
+!/requirements.txt
+!/test.py
+!/tester.py
+!/tester_dir.py
+!/use_tecnics.py

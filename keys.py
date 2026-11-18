@@ -2,6 +2,8 @@ from numbers import Integral
 import pandas as pd
 import read_data
 
+import os
+os.environ["API_KEY"] = "90482da1-606e-4b26-a2bd-84caf30959a0"
 
 temp: str = "auto"
 origin: str = "epoch"
