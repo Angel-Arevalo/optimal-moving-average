@@ -1,0 +1,11 @@
+Window 0: 2024-01-01, MA=('TEMA', 1, 2), valid=True, states=[1], reason=ready
+Window 1: 2024-01-08, MA=('WMA', 1, 40), valid=True, states=[], reason=no_favorable_states
+Window 2: 2024-01-15, MA=('KAMA', 1, 33), valid=True, states=[1], reason=ready
+Window 3: 2024-01-22, MA=('KAMA', 1, 40), valid=True, states=[], reason=no_favorable_states
+Window 4: 2024-01-29, MA=('WMA', 1, 40), valid=True, states=[], reason=no_favorable_states
+Window 5: 2024-02-05, MA=('KAMA', 1, 40), valid=True, states=[1], reason=ready
+Window 6: 2024-02-12, MA=('KAMA', 1, 36), valid=True, states=[2], reason=ready
+Window 7: 2024-02-19, MA=('WMA', 1, 40), valid=True, states=[], reason=no_favorable_states
+Strategy  Total Return  Annualized Return  Max Drawdown  Sharpe Ratio  Profit Factor  Win Rate  Number of Trades  Market Exposure  Average Trade Return  Original Entry Signals  Accepted Entry Signals  Rejected Entry Signals  Acceptance Rate  Average P(favorable) At Entry Filtered Regime Distribution  Net PnL
+Original       0.03554           0.255808     -0.067099      1.660478       1.252289  0.721154               104         0.386161              0.000710                     104                     104                       0         1.000000                       0.303466        {1: 39, 0: 33, 2: 32}   3554.0
+     HMM       0.00636           0.042217     -0.031545      0.802290       1.165367  0.607143                28         0.044643              0.000522                     104                      28                      76         0.269231                       0.955798                {1: 27, 2: 1}    636.0
