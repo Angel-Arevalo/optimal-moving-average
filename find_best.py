@@ -15,19 +15,18 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-def opti_main(data: Union[pd.DataFrame, str], verbose: bool = True, engie: str = "gp", shorts: bool = False) -> list:
+def opti_main(data, verbose: bool = True, engie: str = "gp", shorts: bool = False) -> list:
 
-    keys.pre_ohlc = {}
-    keys.fill_ohlc_dict(data)
+    daily = keys.fill_ohlc_dict(data)
 
-    space: list = make_search_space()
+    space: list = make_search_space(list(keys.mid_cache))
 
     def objective(param: list, kpis: bool = True) -> float:
         method = param[0]
 
         ohlc: pd.DataFrame = keys.mid_cache[param[1]]["close"]
 
-        signals_prices: pd.DataFrame = main(method, ohlc, param[2], param[1], data, shorts)
+        signals_prices: pd.DataFrame = main(method, ohlc, param[2], param[1], data, shorts, daily=daily)
 
         if shorts:
             hr, rr, pr, tr, mae, sqn = backtest(signals_prices, keys.bid_cache[param[1]]["high"], True, shorts)
@@ -51,7 +50,7 @@ def opti_main(data: Union[pd.DataFrame, str], verbose: bool = True, engie: str =
         print(f"\nhit ratio: {b_ht}\nrisk reward: {b_rr}\nprofit factor: {b_pr}\ntrades: {b_trades}")
         print(f"Resultado de estabilidad {b_score}")
         print(f"Mae {b_mae}")
-        print(f"Operando {"cortos" if shorts else "largos"}" )
+        print(f"Operando {'cortos' if shorts else 'largos'}" )
 
     return best_result
 
@@ -117,7 +116,7 @@ def optimizer(objective: Callable, space: list, engie: str = "gp") -> tuple:
     return result.x
 
 
-def make_search_space() -> list:
+def make_search_space(available=None) -> list:
     search_space: list = []
 
     search_space.append(Categorical(list(keys.methods), name="name"))
@@ -131,10 +130,11 @@ def make_search_space() -> list:
     if keys.candles < keys.candles_min:
         raise ValueError("Espacio de búsqueda inválido para vela (min > max)")
 
-    if keys.candles_min == keys.candles:
-        search_space.append(Categorical([keys.candles_min], name="candle"))
+    candles = [i for i in range(keys.candles_min, keys.candles + 1) if available is None or i in available]
+    if len(candles) == 1 or len(candles) != candles[-1] - candles[0] + 1:
+        search_space.append(Categorical(candles, name="candle"))
     else:
-        search_space.append(Integer(keys.candles_min, keys.candles, name="candle"))
+        search_space.append(Integer(candles[0], candles[-1], name="candle"))
 
     if keys.lookbacks_min == keys.lookbacks:
         search_space.append(Categorical([keys.lookbacks_min], name="lookback"))

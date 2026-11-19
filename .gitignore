@@ -1,8 +1,0 @@
-Data/
-__pycache__/
-.ipynb_checkpoints/
-*.pyc 
-*.pyo
-*.pyd
-*.csv
-Imagenes/

@@ -25,23 +25,29 @@ dir_methods = [
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_trials: int = 100) -> Tuple:
+def opti_dir(asset, verbose: bool = True, shorts: bool = False, n_trials: int = 100) -> Tuple:
     keys.bid_cache = {}
     keys.ask_cache = {}
     keys.mid_cache = {}
 
-    keys.fill_ohlc_dict(asset)
+    daily = keys.fill_ohlc_dict(asset)
+
+    ma_candles = [i for i in keys.mid_cache if i >= keys.candles_min]
+    dir_candles = [i for i in keys.mid_cache if i <= 100] or ma_candles
 
     completed_scores: List[float] = []
     score_cache: Dict[tuple, tuple] = {}
+
+    def suggest_candle(trial, name, values):
+        if len(values) == values[-1] - values[0] + 1:
+            return trial.suggest_int(name, values[0], values[-1])
+        return trial.suggest_categorical(name, values)
 
     def objective(trial: optuna.Trial) -> float:
         ma_method = trial.suggest_categorical(
             "ma_method", list(keys.methods)
         )
-        ma_candle = trial.suggest_int(
-            "ma_candle", keys.candles_min, keys.candles
-        )
+        ma_candle = suggest_candle(trial, "ma_candle", ma_candles)
         ma_lookback = trial.suggest_int(
             "ma_lookback", keys.lookbacks_min, keys.lookbacks
         )
@@ -49,7 +55,7 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         filter_side = "both" 
 
         ohlc: pd.DataFrame = keys.mid_cache[ma_candle]["close"]
-        signals_prices: pd.DataFrame = main(ma_method, ohlc, ma_lookback, ma_candle, asset, shorts)
+        signals_prices: pd.DataFrame = main(ma_method, ohlc, ma_lookback, ma_candle, asset, shorts, daily=daily)
 
         if shorts:
             initial_params: tuple = backtest(signals_prices, keys.bid_cache[ma_candle]["high"], True, shorts)
@@ -57,7 +63,7 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
             initial_params: tuple = backtest(signals_prices, keys.ask_cache[ma_candle]["low"], True, shorts)
 
         dir_method = trial.suggest_categorical("name", dir_methods)
-        dir_candle = trial.suggest_int("candle", 1, 100)
+        dir_candle = suggest_candle(trial, "candle", dir_candles)
         dir_window = trial.suggest_int("window", 2, 100)
 
         params = {
@@ -98,7 +104,7 @@ def opti_dir(asset: pd.DataFrame, verbose: bool = True, shorts: bool = False, n_
         elif dir_method == "OU_REVERSION":
             params["follow_tend"] = trial.suggest_float("follow_tend", 0.01, 1.0)
 
-        filter_params: tuple = dir_main(signals_prices, asset, ma_candle, params, shorts, filter_side)
+        filter_params: tuple = dir_main(signals_prices, asset, ma_candle, params, shorts, filter_side, daily=daily)
 
         hr_dir, rr_dir, pr_dir, tr_dir, mae_dir, sqn_dir, intervenidos, _, _ = filter_params
 

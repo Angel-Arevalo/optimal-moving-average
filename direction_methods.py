@@ -7,10 +7,10 @@ import keys
 from tester_dir import hit_ratio, risk_reward, profit_factor, mae, sqn
 from find_best import f
 
-def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: int, params_method: dict, short: bool, filter: str) -> Tuple[float, ...]:
+def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: int, params_method: dict, short: bool, filter: str, daily: bool = False) -> Tuple[float, ...]:
     cond_vector: pd.Series = DIR_METHODS[params_method["name"]](signals_and_prices, params_method)
 
-    rever_tr, trend_tr = _split_signals_and_change(signals_and_prices, cond_vector, short, data, candle_ma, params_method["candle"])
+    rever_tr, trend_tr = _split_signals_and_change(signals_and_prices, cond_vector, short, data, candle_ma, params_method["candle"], daily=daily)
 
     tr_filtered = len(trend_tr)//2
     empty_df = pd.DataFrame({"Signals": [], "Prices": []})
@@ -57,7 +57,7 @@ def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: in
     return hr, rr, pr, tr, mae_val, sqn(rever_tr, trend_tr, short), tr_filtered, f_re, f_td
 
 def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond: pd.Series, short: bool, data: pd.DataFrame, 
-                              candle_ma: int, candle_dir: int, bid_df: pd.DataFrame = None, ask_df: pd.DataFrame = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+                              candle_ma: int, candle_dir: int, bid_df: pd.DataFrame = None, ask_df: pd.DataFrame = None, daily: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
     entry_sig: int = -1 if short else 1
 
@@ -71,8 +71,12 @@ def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond:
 
     entrys = signals_and_prices[signals_and_prices["Signals"] == entry_sig]
 
-    entrada = entrys.index + pd.Timedelta(minutes=candle_ma)
-    cierres_detector = change_dir_cond.index + pd.Timedelta(minutes=candle_dir)
+    # En diario los dos índices identifican la sesión ya cerrada.
+    entrada = entrys.index
+    cierres_detector = change_dir_cond.index
+    if not daily and keys.temp != "d":
+        entrada = entrada + pd.Timedelta(candle_ma, unit=keys.temp)
+        cierres_detector = cierres_detector + pd.Timedelta(candle_dir, unit=keys.temp)
     posiciones = cierres_detector.searchsorted(entrada, side="right") - 1
 
     mascara_valida = posiciones >= 0

@@ -31,7 +31,7 @@ def backtest(signals_and_prices: pd.DataFrame, ohlc_data: pd.DataFrame, calq_sqn
     return hr, rr, pr, tr, mae_val
 
 
-def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.DataFrame, shorts: bool = False) -> pd.Series:
+def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.DataFrame, shorts: bool = False, daily: bool = False) -> pd.Series:
 
     pre_man: pd.Series = man_back.shift(1)
     pre_data: pd.Series = real_data.shift(1)
@@ -62,34 +62,21 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.Dat
             continue
 
         if señales_semana.iloc[-1] == entry_sig:
-            fecha_viernes = fecha_domingo - pd.Timedelta(days=2)
-            velas_viernes = real_data[real_data.index.normalize() == fecha_viernes.normalize()]
-
-            if not velas_viernes.empty:
-
-                ultimo_real = velas_viernes.index[-1]
-                if ultimo_real == señales_semana.index[-1]:
-                    señales_semana = señales_semana.iloc[:-1]
-                elif ultimo_real not in señales_semana.index:
-                    señales_semana.loc[ultimo_real] = -entry_sig
+            fecha_lunes = fecha_domingo.normalize() - pd.Timedelta(days=6)
+            fin_semana = fecha_lunes + pd.DateOffset(days=7)
+            velas_semana = real_data.loc[(real_data.index >= fecha_lunes) & (real_data.index < fin_semana)]
+            ultimo_disponible = velas_semana.index[-1]
+            if ultimo_disponible == señales_semana.index[-1]:
+                señales_semana = señales_semana.iloc[:-1]
             else:
-                fecha_lunes_semana = fecha_domingo - pd.Timedelta(days=6)
-                semana_disponible = real_data[
-                    (real_data.index >= fecha_lunes_semana) & (real_data.index <= fecha_domingo)
-                ]
-
-                if not semana_disponible.empty:
-                    ultimo_disponible = semana_disponible.index[-1]
-                    if ultimo_disponible == señales_semana.index[-1]:
-                        señales_semana = señales_semana.iloc[:-1]
-                    elif ultimo_disponible not in señales_semana.index:
-                        señales_semana.loc[ultimo_disponible] = -entry_sig
+                señales_semana = señales_semana.copy()
+                señales_semana.loc[ultimo_disponible] = -entry_sig
 
         if not señales_semana.empty:
             definitive_vector.append(señales_semana)
 
     if not definitive_vector:
-        return pd.Series(dtype=int)
+        return vector_buy.iloc[:0]
 
     return pd.concat(definitive_vector)
 
