@@ -1,0 +1,15 @@
+Ventana 098 | Optimización 2023-11-20 a 2024-05-20 | Evaluación 2025-11-17 a 2025-11-24 (fines exclusivos)
+
+Method: ATR_EXPANSION | Side: Longs | Filter: revert
+Params: {'ma_method': 'MIDPOINT', 'ma_candle': 6, 'ma_lookback': 38, 'name': 'ATR_EXPANSION', 'candle': 5, 'window': 24, 'lookback_ma': 72, 'follow_tend': 1.3210643872608858}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          84.00% |          88.89%
+Risk Reward     |          0.6687 |          0.5336
+Profit Factor   |          3.5107 |          4.2688
+Trades          |              25 |      7 mod / 18
+SQN             |          2.2388 |          2.1544
+MAE             |         1.82002 |         1.85406
+-------------------------------------------------
+

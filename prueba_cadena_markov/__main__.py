@@ -9,7 +9,11 @@ def main():
     parser = argparse.ArgumentParser(description="Original versus causal entry-only HMM, weekly walk-forward")
     parser.add_argument("--data", type=Path, default=ROOT / "data" / "BTC_hourly.parquet")
     parser.add_argument("--start", default="2024-01-01")
-    parser.add_argument("--weeks", type=int, default=8)
+    period = parser.add_mutually_exclusive_group()
+    period.add_argument("--weeks", type=int, default=8)
+    period.add_argument("--end", type=pd.Timestamp, help="Exclusive evaluation end date (UTC)")
+    parser.add_argument("--optimizer-kpis", action="store_true",
+                        help="Run each MA search and print its in-sample KPIs")
     parser.add_argument("--optimization-weeks", type=int, default=26)
     parser.add_argument("--fit-weeks", type=int, default=26)
     parser.add_argument("--calibration-weeks", type=int, default=52)
@@ -34,7 +38,8 @@ def main():
     markov = MarkovConfig(n_components=args.n_states, probability_threshold=args.threshold,
                           min_trades_per_regime=args.min_trades)
     result = run_walk_forward(pd.read_parquet(args.data), args.start, config, markov,
-                              output=args.output, experiments=args.experiments)
+                              output=args.output, experiments=args.experiments, evaluation_end=args.end,
+                              optimizer_kpis=args.optimizer_kpis)
     print(result.to_string(index=False))
 
 

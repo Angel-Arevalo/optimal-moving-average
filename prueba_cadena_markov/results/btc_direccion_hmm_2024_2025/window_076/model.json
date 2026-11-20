@@ -1,0 +1,86 @@
+{
+  "window": 76,
+  "optimization_start": "2023-06-19 00:00:00",
+  "optimization_end": "2023-12-18 00:00:00",
+  "fit_end": "2024-06-17 00:00:00",
+  "calibration_end": "2025-06-16 00:00:00",
+  "evaluation_end": "2025-06-23 00:00:00",
+  "ma_parameters": [
+    "DEMA",
+    2,
+    14
+  ],
+  "optimizer_params": {
+    "ma_method": "DEMA",
+    "ma_candle": 2,
+    "ma_lookback": 14,
+    "name": "OU_REVERSION",
+    "candle": 5,
+    "window": 55,
+    "follow_tend": 0.46939114398497844
+  },
+  "optimization_kpis": {
+    "score": 7768146.0700413175,
+    "hr": 0.8571428571428571,
+    "rr": 3.7976190476190474,
+    "pr": 22.785714285714285,
+    "tr": 14,
+    "mae": 0.22926498893554711,
+    "sqn": 3.492387447879433,
+    "filter": "revert",
+    "hr_": 0.75,
+    "rr_": 0.4446491175946284,
+    "pr_": 1.333947352783885,
+    "tr_": 232,
+    "mae_": 0.7035908324783394,
+    "sqn_": 0.8232051406830482,
+    "tr_inter": 218
+  },
+  "model": {
+    "config": {
+      "enabled": true,
+      "n_components": 3,
+      "covariance_type": "diag",
+      "n_iter": 200,
+      "tol": 0.0001,
+      "random_state": 42,
+      "probability_threshold": 0.7,
+      "min_trades_per_regime": 30,
+      "min_observations": 300,
+      "min_state_observations": 30,
+      "covariance_floor": 1e-06,
+      "max_condition": 100000000.0,
+      "bootstrap_samples": 2000,
+      "bootstrap_block": 5,
+      "confidence": 0.95,
+      "features": {
+        "slope_period": 3,
+        "volatility_period": 20,
+        "efficiency_period": 20
+      }
+    },
+    "features": [
+      "distance_to_ma",
+      "distance_change",
+      "ma_slope",
+      "realized_volatility",
+      "efficiency_ratio"
+    ],
+    "valid": true,
+    "reason": "no_favorable_states",
+    "fit_start": "2023-12-18 01:00:00",
+    "fit_end": "2024-06-17 00:00:00",
+    "calibration_end": "2025-06-16 00:00:00",
+    "favorable_states": [],
+    "diagnostics": {
+      "iterations": 42,
+      "last_log_likelihood_gain": 7.622815246577375e-05,
+      "fit_observations": 4346,
+      "state_observations": [
+        1260,
+        1208,
+        1878
+      ]
+    }
+  }
+}

@@ -1,0 +1,15 @@
+Ventana 070 | Optimización 2023-05-08 a 2023-11-06 | Evaluación 2025-05-05 a 2025-05-12 (fines exclusivos)
+
+Method: KEF | Side: Longs | Filter: revert
+Params: {'ma_method': 'SMA', 'ma_candle': 4, 'ma_lookback': 34, 'name': 'KEF', 'candle': 3, 'window': 2, 'follow_tend': 0.5429818513918676}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          79.59% |          93.33%
+Risk Reward     |          0.3870 |          2.1901
+Profit Factor   |          1.5093 |         30.6612
+Trades          |              49 |     34 mod / 15
+SQN             |          0.7407 |          2.5568
+MAE             |         1.35008 |         0.73302
+-------------------------------------------------
+

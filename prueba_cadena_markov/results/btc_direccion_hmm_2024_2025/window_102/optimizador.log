@@ -1,0 +1,15 @@
+Ventana 102 | Optimización 2023-12-18 a 2024-06-17 | Evaluación 2025-12-15 a 2025-12-22 (fines exclusivos)
+
+Method: KEF | Side: Longs | Filter: revert
+Params: {'ma_method': 'EMA', 'ma_candle': 6, 'ma_lookback': 15, 'name': 'KEF', 'candle': 3, 'window': 2, 'follow_tend': 0.6299202816235863}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          75.00% |          90.00%
+Risk Reward     |          0.6479 |          3.0603
+Profit Factor   |          1.9438 |         27.5427
+Trades          |              48 |     38 mod / 10
+SQN             |          1.6597 |          2.4507
+MAE             |         2.17090 |         1.13821
+-------------------------------------------------
+

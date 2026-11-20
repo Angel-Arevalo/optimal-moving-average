@@ -1,0 +1,15 @@
+Ventana 045 | Optimización 2022-11-14 a 2023-05-15 | Evaluación 2024-11-11 a 2024-11-18 (fines exclusivos)
+
+Method: HURST | Side: Longs | Filter: revert
+Params: {'ma_method': 'KAMA', 'ma_candle': 2, 'ma_lookback': 22, 'name': 'HURST', 'candle': 2, 'window': 21, 'follow_tend': 0.5158162189179407}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          85.22% |          89.33%
+Risk Reward     |          0.3023 |          0.3466
+Profit Factor   |          1.7424 |          2.9028
+Trades          |             115 |     40 mod / 75
+SQN             |          1.5538 |          2.5087
+MAE             |         1.06402 |         0.89693
+-------------------------------------------------
+

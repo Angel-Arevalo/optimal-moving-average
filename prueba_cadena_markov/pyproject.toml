@@ -6,7 +6,7 @@ dependencies = [
   "numpy>=2.2,<3", "pandas>=2.2,<3", "scipy>=1.14,<2",
   "scikit-learn>=1.6,<2", "hmmlearn==0.3.3", "scikit-optimize==0.10.2",
   "ta-lib>=0.6,<0.9", "pyarrow>=18", "qnt", "h5netcdf>=1.4",
-  "pytest>=8,<10", "threadpoolctl>=3",
+  "pytest>=8,<10", "threadpoolctl>=3", "optuna>=4,<6",
 ]
 
 [tool.uv.sources]

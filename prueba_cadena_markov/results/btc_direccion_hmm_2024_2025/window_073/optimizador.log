@@ -1,0 +1,15 @@
+Ventana 073 | Optimización 2023-05-29 a 2023-11-27 | Evaluación 2025-05-26 a 2025-06-02 (fines exclusivos)
+
+Method: OU_REVERSION | Side: Longs | Filter: revert
+Params: {'ma_method': 'MIDPOINT', 'ma_candle': 5, 'ma_lookback': 31, 'name': 'OU_REVERSION', 'candle': 2, 'window': 9, 'follow_tend': 0.7364358143525267}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          74.29% |          81.82%
+Risk Reward     |          0.6579 |         87.5185
+Profit Factor   |          1.9005 |        393.8333
+Trades          |              35 |     24 mod / 11
+SQN             |          1.0600 |          2.5365
+MAE             |         1.20657 |         0.56180
+-------------------------------------------------
+

@@ -1,0 +1,15 @@
+Ventana 099 | Optimización 2023-11-27 a 2024-05-27 | Evaluación 2025-11-24 a 2025-12-01 (fines exclusivos)
+
+Method: KEF | Side: Longs | Filter: revert
+Params: {'ma_method': 'MIDPOINT', 'ma_candle': 3, 'ma_lookback': 25, 'name': 'KEF', 'candle': 1, 'window': 54, 'follow_tend': 0.2040694052344516}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          82.67% |          83.56%
+Risk Reward     |          0.5111 |          0.4985
+Profit Factor   |          2.4377 |          2.5338
+Trades          |              75 |      2 mod / 73
+SQN             |          2.3745 |          2.3986
+MAE             |         1.65875 |         1.59415
+-------------------------------------------------
+

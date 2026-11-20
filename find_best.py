@@ -14,8 +14,11 @@ import keys
 import warnings
 warnings.filterwarnings("ignore")
 
+DEFAULT_SEED = 42
 
-def opti_main(data, verbose: bool = True, engie: str = "gp", shorts: bool = False) -> list:
+
+def opti_main(data, verbose: bool = True, engie: str = "gp", shorts: bool = False,
+              *, seed: int = DEFAULT_SEED) -> list:
 
     daily = keys.fill_ohlc_dict(data)
 
@@ -38,7 +41,7 @@ def opti_main(data, verbose: bool = True, engie: str = "gp", shorts: bool = Fals
 
         return (sqn, hr, rr, pr, tr, mae)
 
-    result: list = optimizer(objective, space, engie)
+    result: list = optimizer(objective, space, engie, seed=seed)
 
     best_result = result
     b_score, b_ht, b_rr, b_pr, b_trades, b_mae = objective(result, False)
@@ -90,14 +93,14 @@ def f(
 
     return float(fitness_score)
 
-def optimizer(objective: Callable, space: list, engie: str = "gp") -> tuple:
+def optimizer(objective: Callable, space: list, engie: str = "gp", *, seed: int = DEFAULT_SEED) -> tuple:
     if engie == "gp":
         result = gp_minimize(
                     func=objective,
                     dimensions=space,
                     n_calls=keys.calls,
                     n_initial_points=10,
-                    random_state=42,
+                    random_state=seed,
                 )
 
     elif engie == "fm":
@@ -106,7 +109,7 @@ def optimizer(objective: Callable, space: list, engie: str = "gp") -> tuple:
                     dimensions=space,
                     n_calls=keys.calls,
                     n_initial_points=10,
-                    random_state=None,
+                    random_state=seed,
                     verbose=False
                  )
 
@@ -116,10 +119,17 @@ def optimizer(objective: Callable, space: list, engie: str = "gp") -> tuple:
     return result.x
 
 
+def ordered_ma_methods() -> list:
+    # A set's iteration order can vary between Python processes.
+    if isinstance(keys.methods, (set, frozenset)):
+        return sorted(keys.methods)
+    return list(keys.methods)
+
+
 def make_search_space(available=None) -> list:
     search_space: list = []
 
-    search_space.append(Categorical(list(keys.methods), name="name"))
+    search_space.append(Categorical(ordered_ma_methods(), name="name"))
 
     if keys.lookbacks_min < 2:
         raise ValueError("Espacio pequeño de vista hacia atras")

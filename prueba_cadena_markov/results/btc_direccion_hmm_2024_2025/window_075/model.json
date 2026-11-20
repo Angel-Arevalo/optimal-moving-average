@@ -1,0 +1,87 @@
+{
+  "window": 75,
+  "optimization_start": "2023-06-12 00:00:00",
+  "optimization_end": "2023-12-11 00:00:00",
+  "fit_end": "2024-06-10 00:00:00",
+  "calibration_end": "2025-06-09 00:00:00",
+  "evaluation_end": "2025-06-16 00:00:00",
+  "ma_parameters": [
+    "KAMA",
+    4,
+    30
+  ],
+  "optimizer_params": {
+    "ma_method": "KAMA",
+    "ma_candle": 4,
+    "ma_lookback": 30,
+    "name": "ATR_EXPANSION",
+    "candle": 1,
+    "window": 3,
+    "lookback_ma": 58,
+    "follow_tend": 1.9699419242708538
+  },
+  "optimization_kpis": {
+    "score": 2467776.967896485,
+    "hr": 0.8444444444444444,
+    "rr": 2.522404557435592,
+    "pr": 13.693053311793214,
+    "tr": 45,
+    "mae": 0.4608036415583635,
+    "sqn": 4.013480427393644,
+    "filter": "revert",
+    "hr_": 0.8135593220338984,
+    "rr_": 0.6404812359631964,
+    "pr_": 2.794827211475766,
+    "tr_": 59,
+    "mae_": 0.8208273760085313,
+    "sqn_": 1.8606663162222885,
+    "tr_inter": 14
+  },
+  "model": {
+    "config": {
+      "enabled": true,
+      "n_components": 3,
+      "covariance_type": "diag",
+      "n_iter": 200,
+      "tol": 0.0001,
+      "random_state": 42,
+      "probability_threshold": 0.7,
+      "min_trades_per_regime": 30,
+      "min_observations": 300,
+      "min_state_observations": 30,
+      "covariance_floor": 1e-06,
+      "max_condition": 100000000.0,
+      "bootstrap_samples": 2000,
+      "bootstrap_block": 5,
+      "confidence": 0.95,
+      "features": {
+        "slope_period": 3,
+        "volatility_period": 20,
+        "efficiency_period": 20
+      }
+    },
+    "features": [
+      "distance_to_ma",
+      "distance_change",
+      "ma_slope",
+      "realized_volatility",
+      "efficiency_ratio"
+    ],
+    "valid": true,
+    "reason": "no_favorable_states",
+    "fit_start": "2023-12-11 01:00:00",
+    "fit_end": "2024-06-10 00:00:00",
+    "calibration_end": "2025-06-09 00:00:00",
+    "favorable_states": [],
+    "diagnostics": {
+      "iterations": 25,
+      "last_log_likelihood_gain": 8.197696661227383e-05,
+      "fit_observations": 4346,
+      "state_observations": [
+        1894,
+        1271,
+        1181
+      ]
+    }
+  }
+}

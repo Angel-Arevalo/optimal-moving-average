@@ -1,0 +1,15 @@
+Ventana 069 | Optimización 2023-05-01 a 2023-10-30 | Evaluación 2025-04-28 a 2025-05-05 (fines exclusivos)
+
+Method: OU_REVERSION | Side: Longs | Filter: revert
+Params: {'ma_method': 'KAMA', 'ma_candle': 6, 'ma_lookback': 7, 'name': 'OU_REVERSION', 'candle': 4, 'window': 15, 'follow_tend': 0.24213359984346636}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          75.86% |          77.78%
+Risk Reward     |          0.4950 |          1.6666
+Profit Factor   |          1.5558 |          5.8332
+Trades          |              58 |     13 mod / 45
+SQN             |          0.8844 |          3.3853
+MAE             |         1.31597 |         0.91026
+-------------------------------------------------
+

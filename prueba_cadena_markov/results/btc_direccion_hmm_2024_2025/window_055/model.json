@@ -1,0 +1,81 @@
+{
+  "window": 55,
+  "optimization_start": "2023-01-23 00:00:00",
+  "optimization_end": "2023-07-24 00:00:00",
+  "fit_end": "2024-01-22 00:00:00",
+  "calibration_end": "2025-01-20 00:00:00",
+  "evaluation_end": "2025-01-27 00:00:00",
+  "ma_parameters": [
+    "MIDPOINT",
+    3,
+    26
+  ],
+  "optimizer_params": {
+    "ma_method": "MIDPOINT",
+    "ma_candle": 3,
+    "ma_lookback": 26,
+    "name": "HURST",
+    "candle": 2,
+    "window": 97,
+    "follow_tend": 0.5260294254842727
+  },
+  "optimization_kpis": {
+    "score": 843.4826207001774,
+    "hr": 0.8571428571428571,
+    "rr": 0.5411449827617493,
+    "pr": 3.2468698965704954,
+    "tr": 56,
+    "mae": 1.1660031663159154,
+    "sqn": 2.8472305145097594,
+    "filter": "revert",
+    "hr_": 0.8227848101265823,
+    "rr_": 0.4648553935800658,
+    "pr_": 2.158257184478877,
+    "tr_": 79,
+    "mae_": 1.4177005472545228,
+    "sqn_": 2.1564997390396297,
+    "tr_inter": 23
+  },
+  "model": {
+    "config": {
+      "enabled": true,
+      "n_components": 3,
+      "covariance_type": "diag",
+      "n_iter": 200,
+      "tol": 0.0001,
+      "random_state": 42,
+      "probability_threshold": 0.7,
+      "min_trades_per_regime": 30,
+      "min_observations": 300,
+      "min_state_observations": 30,
+      "covariance_floor": 1e-06,
+      "max_condition": 100000000.0,
+      "bootstrap_samples": 2000,
+      "bootstrap_block": 5,
+      "confidence": 0.95,
+      "features": {
+        "slope_period": 3,
+        "volatility_period": 20,
+        "efficiency_period": 20
+      }
+    },
+    "features": [
+      "distance_to_ma",
+      "distance_change",
+      "ma_slope",
+      "realized_volatility",
+      "efficiency_ratio"
+    ],
+    "valid": false,
+    "reason": "not_converged",
+    "fit_start": "2023-07-24 01:00:00",
+    "fit_end": "2024-01-22 00:00:00",
+    "calibration_end": "2025-01-20 00:00:00",
+    "favorable_states": [],
+    "diagnostics": {
+      "iterations": 28,
+      "last_log_likelihood_gain": -0.3112852149479295,
+      "fit_observations": 4368
+    }
+  }
+}

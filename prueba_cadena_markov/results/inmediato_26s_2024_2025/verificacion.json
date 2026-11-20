@@ -1,0 +1,14 @@
+{
+  "ventanas": 105,
+  "desfase_semanas": 0,
+  "limites_temporales_verificados": true,
+  "todas_las_entradas_y_salidas_con_precio_observable": true,
+  "primer_cruce_de_salida_verificado": true,
+  "equity_independiente_verificada_en_cada_hora": true,
+  "efectivo_minimo": {
+    "find_best": 1758.0,
+    "find_best_dir": 12588.0,
+    "find_best_dir_sin_filtro": 15096.0
+  },
+  "archivos_anteriores_identicos": 1444
+}

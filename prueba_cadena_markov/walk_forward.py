@@ -82,7 +82,7 @@ def calibration_experiments(features, all_trades, start, end, fit_end, config, c
 
 
 def run_walk_forward(data, evaluation_start, run_config=RunConfig(), markov_config=MarkovConfig(),
-                     *, output=None, experiments=False):
+                     *, output=None, experiments=False, evaluation_end=None, optimizer_kpis=False):
     validate_market(data)
     output = Path(output) if output else ROOT / "results" / "btc_ab"
     output.mkdir(parents=True, exist_ok=True)
@@ -92,7 +92,13 @@ def run_walk_forward(data, evaluation_start, run_config=RunConfig(), markov_conf
     if start.dayofweek != 0 or start != start.normalize():
         raise ValueError("Evaluation starts Monday 00:00 UTC for the retraining schedule")
     source = ohlc_resolution(data.index)
-    end = start + pd.Timedelta(weeks=run_config.evaluation_weeks)
+    week = pd.Timedelta(weeks=1)
+    end = (start + week * run_config.evaluation_weeks if evaluation_end is None
+           else pd.Timestamp(evaluation_end))
+    if end <= start or end != end.normalize():
+        raise ValueError("Evaluation end must be a midnight after the start")
+    week_starts = pd.date_range(start, end, freq="7D", inclusive="left")
+    run_config = replace(run_config, evaluation_weeks=len(week_starts))
     earliest = start - pd.Timedelta(weeks=run_config.optimization_weeks + run_config.fit_weeks + run_config.calibration_weeks)
     if data.index[0] > earliest or data.index[-1] + source < end:
         raise ValueError(f"Insufficient data: need source bars covering {earliest} through {end}")
@@ -102,16 +108,20 @@ def run_walk_forward(data, evaluation_start, run_config=RunConfig(), markov_conf
     execution = ContinuousExecution(units=run_config.units, fee_bps=run_config.fee_bps,
                                     n_components=markov_config.n_components)
     frozen_config = replace(markov_config, enabled=True)
-    for number in range(run_config.evaluation_weeks):
-        test_start = start + pd.Timedelta(weeks=number)
-        test_end = test_start + pd.Timedelta(weeks=1)
+    for number, test_start in enumerate(week_starts):
+        test_end = min(test_start + week, end)
         fit_end = test_start - pd.Timedelta(weeks=run_config.calibration_weeks)
         opt_end = fit_end - pd.Timedelta(weeks=run_config.fit_weeks)
         opt_start = opt_end - pd.Timedelta(weeks=run_config.optimization_weeks)
         optimization_data = data.loc[(data.index >= opt_start) & (data.index + source <= opt_end)]
         key = fingerprint(optimization_data, asdict(run_config))
         param_path = cache / ("ma_" + key + ".json")
-        if param_path.exists():
+        if optimizer_kpis:
+            print(f"Ventana {number:03d} | Evaluación {test_start.date()} a {test_end.date()} "
+                  f"| Optimización {opt_start.date()} a {opt_end.date()} (fines exclusivos)", flush=True)
+            parameters = optimize(optimization_data, run_config, verbose=True)
+            write_json(param_path, parameters)
+        elif param_path.exists():
             parameters = tuple(json.loads(param_path.read_text()))
         else:
             parameters = optimize(optimization_data, run_config)

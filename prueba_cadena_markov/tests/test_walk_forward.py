@@ -104,3 +104,28 @@ def test_cache_is_sensitive_to_data_parameters_and_cutoff(tmp_path):
     assert key == wf.fingerprint(frame.copy(), {"threshold": .7})
     assert key != wf.fingerprint(frame, {"threshold": .8})
     assert key != wf.fingerprint(frame*2, {"threshold": .7})
+
+
+def test_partial_week_and_optimizer_kpis(tmp_path, monkeypatch, capsys):
+    data = data_for_integration()
+    start = data.index[0] + pd.Timedelta(weeks=8)
+    end = start + pd.Timedelta(days=10)
+    data = data.loc[data.index < end]
+    config = RunConfig(optimization_weeks=2, fit_weeks=2, calibration_weeks=4)
+    calls = []
+
+    def optimize(frame, config, *, verbose=False):
+        calls.append(verbose)
+        return "SMA", 2, 4
+
+    monkeypatch.setattr(wf, "ROOT", tmp_path)
+    monkeypatch.setattr(wf, "optimize", optimize)
+    output = tmp_path / "result"
+    wf.run_walk_forward(data, start, config, evaluation_end=end, optimizer_kpis=True, output=output)
+    manifest = json.loads((output / "manifest.json").read_text())
+    equity = pd.read_csv(output / "original_equity.csv", parse_dates=["available_at"])
+    assert calls == [True, True]
+    assert "Ventana 001" in capsys.readouterr().out
+    assert manifest["run_config"]["evaluation_weeks"] == 2
+    assert pd.Timestamp(manifest["windows"][-1]["evaluation_end"]) == end
+    assert equity.available_at.iloc[-1] == end

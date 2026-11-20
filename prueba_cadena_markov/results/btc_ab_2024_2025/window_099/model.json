@@ -1,0 +1,63 @@
+{
+  "window": 99,
+  "optimization_start": "2023-11-27 00:00:00",
+  "optimization_end": "2024-05-27 00:00:00",
+  "fit_end": "2024-11-25 00:00:00",
+  "calibration_end": "2025-11-24 00:00:00",
+  "evaluation_end": "2025-12-01 00:00:00",
+  "ma_parameters": [
+    "WMA",
+    3,
+    39
+  ],
+  "model": {
+    "config": {
+      "enabled": true,
+      "n_components": 3,
+      "covariance_type": "diag",
+      "n_iter": 200,
+      "tol": 0.0001,
+      "random_state": 42,
+      "probability_threshold": 0.7,
+      "min_trades_per_regime": 30,
+      "min_observations": 300,
+      "min_state_observations": 30,
+      "covariance_floor": 1e-06,
+      "max_condition": 100000000.0,
+      "bootstrap_samples": 2000,
+      "bootstrap_block": 5,
+      "confidence": 0.95,
+      "features": {
+        "slope_period": 3,
+        "volatility_period": 20,
+        "efficiency_period": 20
+      }
+    },
+    "features": [
+      "distance_to_ma",
+      "distance_change",
+      "ma_slope",
+      "realized_volatility",
+      "efficiency_ratio"
+    ],
+    "valid": true,
+    "reason": "no_favorable_states",
+    "fit_start": "2024-05-27 01:00:00",
+    "fit_end": "2024-11-25 00:00:00",
+    "calibration_end": "2025-11-24 00:00:00",
+    "favorable_states": [],
+    "diagnostics": {
+      "iterations": 42,
+      "last_log_likelihood_gain": 6.638223203481175e-05,
+      "fit_observations": 4368,
+      "state_observations": [
+        884,
+        1980,
+        1504
+      ]
+    }
+  },
+  "observation_frequency": "0 days 01:00:00",
+  "optimization_hash": "b228ec5a60cb71a84d451cf63010ac2d0dd3f4cbb4da53f252734291e5161c79",
+  "fit_hash": "7edee95d341df77cc7fcbb6b6062941dc06be68ed95f5fb695d91f5a7f854d98"
+}

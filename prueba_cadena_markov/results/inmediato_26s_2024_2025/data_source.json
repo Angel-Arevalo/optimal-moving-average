@@ -1,0 +1,12 @@
+{
+  "provider": "Quantiacs",
+  "loader": "qnt.data.crypto.load_data",
+  "asset": "BTC",
+  "requested_start": "2021-12-27",
+  "requested_end_exclusive": "2026-01-01",
+  "rows": 35176,
+  "first": "2021-12-27 00:00:00",
+  "last": "2025-12-31 23:00:00",
+  "timestamps": "UTC naive, bar starts; available one hour later",
+  "sha256": "a7a0716ae5d88f9e03f471203c41669a8a1a3720eb0a0ab713e985c3c72c5087"
+}

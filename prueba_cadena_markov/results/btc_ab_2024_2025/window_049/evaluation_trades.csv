@@ -1,0 +1,2 @@
+entry_time,entry_price,exit_time,exit_price,pnl,net_return,holding_hours,window,exit_window,exit_reason,parameters,history_start,accepted,current_regime,p_0,p_1,p_2
+2024-12-09 06:00:00,99569.0,2024-12-11 09:00:00,97949.0,-1620.0,-0.01627012423545481,51.0,49,49,ma_cross,"('MIDPOINT', 3, 36)",2022-12-12,False,2.0,0.0,0.0,1.0

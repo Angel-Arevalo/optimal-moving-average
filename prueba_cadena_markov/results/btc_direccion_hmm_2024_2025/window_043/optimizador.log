@@ -1,0 +1,15 @@
+Ventana 043 | Optimización 2022-10-31 a 2023-05-01 | Evaluación 2024-10-28 a 2024-11-04 (fines exclusivos)
+
+Method: ATR_EXPANSION | Side: Longs | Filter: revert
+Params: {'ma_method': 'T3', 'ma_candle': 4, 'ma_lookback': 37, 'name': 'ATR_EXPANSION', 'candle': 2, 'window': 81, 'lookback_ma': 64, 'follow_tend': 1.032717539780043}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          78.57% |          85.00%
+Risk Reward     |          0.3987 |          1.4703
+Profit Factor   |          1.4619 |          8.3319
+Trades          |              28 |      8 mod / 20
+SQN             |          0.6017 |          3.2485
+MAE             |         1.36452 |         0.85934
+-------------------------------------------------
+

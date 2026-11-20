@@ -1,0 +1,15 @@
+Ventana 006 | Optimización 2022-02-14 a 2022-08-15 | Evaluación 2024-02-12 a 2024-02-19 (fines exclusivos)
+
+Method: ADX | Side: Longs | Filter: revert
+Params: {'ma_method': 'DEMA', 'ma_candle': 1, 'ma_lookback': 17, 'name': 'ADX', 'candle': 2, 'window': 27, 'follow_tend': 14.571891862073493}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          69.69% |          83.33%
+Risk Reward     |          0.4500 |          0.4987
+Profit Factor   |          1.0347 |          2.4935
+Trades          |             452 |    398 mod / 54
+SQN             |          0.0998 |          2.4431
+MAE             |         1.10649 |         0.67331
+-------------------------------------------------
+

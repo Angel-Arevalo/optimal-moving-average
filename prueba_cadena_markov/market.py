@@ -26,9 +26,9 @@ def optimizer_settings(config: RunConfig):
             setattr(keys, k, v)
 
 
-def optimize(data, config):
+def optimize(data, config, *, verbose=False):
     with optimizer_settings(config):
-        result = opti_main(data, verbose=False, engie="gp", shorts=False)
+        result = opti_main(data, verbose=verbose, engie="gp", shorts=False)
     return str(result[0]), int(result[1]), int(result[2])
 
 

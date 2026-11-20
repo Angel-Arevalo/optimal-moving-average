@@ -1,0 +1,15 @@
+Ventana 085 | Optimización 2023-08-21 a 2024-02-19 | Evaluación 2025-08-18 a 2025-08-25 (fines exclusivos)
+
+Method: ADX | Side: Longs | Filter: revert
+Params: {'ma_method': 'KAMA', 'ma_candle': 6, 'ma_lookback': 33, 'name': 'ADX', 'candle': 4, 'window': 84, 'follow_tend': 29.706713273309735}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          73.33% |          78.26%
+Risk Reward     |          1.2161 |          1.1638
+Profit Factor   |          3.3442 |          4.1895
+Trades          |              30 |      7 mod / 23
+SQN             |          2.3051 |          2.3539
+MAE             |         1.28192 |         1.14059
+-------------------------------------------------
+

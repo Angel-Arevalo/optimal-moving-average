@@ -1,0 +1,15 @@
+Ventana 081 | Optimización 2023-07-24 a 2024-01-22 | Evaluación 2025-07-21 a 2025-07-28 (fines exclusivos)
+
+Method: OU_REVERSION | Side: Longs | Filter: revert
+Params: {'ma_method': 'TEMA', 'ma_candle': 3, 'ma_lookback': 30, 'name': 'OU_REVERSION', 'candle': 5, 'window': 65, 'follow_tend': 0.21368509089295484}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          73.64% |          94.12%
+Risk Reward     |          0.4906 |          3.7796
+Profit Factor   |          1.3703 |         60.4737
+Trades          |             110 |     93 mod / 17
+SQN             |          0.8508 |          4.7855
+MAE             |         1.10979 |         0.32697
+-------------------------------------------------
+

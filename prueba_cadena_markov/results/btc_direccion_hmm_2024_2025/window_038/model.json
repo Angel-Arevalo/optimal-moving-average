@@ -1,0 +1,86 @@
+{
+  "window": 38,
+  "optimization_start": "2022-09-26 00:00:00",
+  "optimization_end": "2023-03-27 00:00:00",
+  "fit_end": "2023-09-25 00:00:00",
+  "calibration_end": "2024-09-23 00:00:00",
+  "evaluation_end": "2024-09-30 00:00:00",
+  "ma_parameters": [
+    "T3",
+    4,
+    38
+  ],
+  "optimizer_params": {
+    "ma_method": "T3",
+    "ma_candle": 4,
+    "ma_lookback": 38,
+    "name": "ADX",
+    "candle": 5,
+    "window": 85,
+    "follow_tend": 15.123508560996623
+  },
+  "optimization_kpis": {
+    "score": 483905461682.9463,
+    "hr": 0.8333333333333334,
+    "rr": 72.9,
+    "pr": 364.5,
+    "tr": 6,
+    "mae": 0.5759941408882542,
+    "sqn": 2.263436002773587,
+    "filter": "revert",
+    "hr_": 0.7916666666666666,
+    "rr_": 0.18353228431904503,
+    "pr_": 0.6974226804123711,
+    "tr_": 24,
+    "mae_": 2.22899338904212,
+    "sqn_": -0.37206091949046327,
+    "tr_inter": 18
+  },
+  "model": {
+    "config": {
+      "enabled": true,
+      "n_components": 3,
+      "covariance_type": "diag",
+      "n_iter": 200,
+      "tol": 0.0001,
+      "random_state": 42,
+      "probability_threshold": 0.7,
+      "min_trades_per_regime": 30,
+      "min_observations": 300,
+      "min_state_observations": 30,
+      "covariance_floor": 1e-06,
+      "max_condition": 100000000.0,
+      "bootstrap_samples": 2000,
+      "bootstrap_block": 5,
+      "confidence": 0.95,
+      "features": {
+        "slope_period": 3,
+        "volatility_period": 20,
+        "efficiency_period": 20
+      }
+    },
+    "features": [
+      "distance_to_ma",
+      "distance_change",
+      "ma_slope",
+      "realized_volatility",
+      "efficiency_ratio"
+    ],
+    "valid": true,
+    "reason": "no_favorable_states",
+    "fit_start": "2023-03-27 01:00:00",
+    "fit_end": "2023-09-25 00:00:00",
+    "calibration_end": "2024-09-23 00:00:00",
+    "favorable_states": [],
+    "diagnostics": {
+      "iterations": 55,
+      "last_log_likelihood_gain": 9.895275070448406e-05,
+      "fit_observations": 4368,
+      "state_observations": [
+        1526,
+        1126,
+        1716
+      ]
+    }
+  }
+}

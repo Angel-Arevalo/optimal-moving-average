@@ -1,0 +1,15 @@
+Ventana 049 | Optimización 2022-12-12 a 2023-06-12 | Evaluación 2024-12-09 a 2024-12-16 (fines exclusivos)
+
+Method: HURST | Side: Longs | Filter: revert
+Params: {'ma_method': 'T3', 'ma_candle': 5, 'ma_lookback': 22, 'name': 'HURST', 'candle': 2, 'window': 84, 'follow_tend': 0.7523435477078261}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          81.25% |          81.25%
+Risk Reward     |          1.0778 |          1.0778
+Profit Factor   |          4.6705 |          4.6705
+Trades          |              32 |      0 mod / 32
+SQN             |          2.7178 |          2.7178
+MAE             |         1.54011 |         1.54011
+-------------------------------------------------
+

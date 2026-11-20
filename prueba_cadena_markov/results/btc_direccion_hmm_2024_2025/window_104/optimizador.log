@@ -1,0 +1,15 @@
+Ventana 104 | Optimización 2024-01-01 a 2024-07-01 | Evaluación 2025-12-29 a 2026-01-01 (fines exclusivos)
+
+Method: ADX | Side: Longs | Filter: revert
+Params: {'ma_method': 'TEMA', 'ma_candle': 4, 'ma_lookback': 5, 'name': 'ADX', 'candle': 2, 'window': 5, 'follow_tend': 21.041543575647893}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          59.00% |          71.43%
+Risk Reward     |          0.5783 |         15.8000
+Profit Factor   |          0.8322 |         39.5000
+Trades          |             200 |     193 mod / 7
+SQN             |         -0.6273 |          2.5265
+MAE             |         1.39489 |         0.36103
+-------------------------------------------------
+

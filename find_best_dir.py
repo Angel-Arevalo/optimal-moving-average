@@ -8,7 +8,7 @@ from direction_methods import dir_main
 import keys
 
 from tester import backtest
-from find_best import softplus, f as f_single
+from find_best import DEFAULT_SEED, ordered_ma_methods, softplus, f as f_single
 from use_tecnics import main
 
 dir_methods = [
@@ -25,7 +25,10 @@ dir_methods = [
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-def opti_dir(asset, verbose: bool = True, shorts: bool = False, n_trials: int = 100) -> Tuple:
+def opti_dir(asset, verbose: bool = True, shorts: bool = False, n_trials: int = 100,
+             *, seed: int = DEFAULT_SEED, filter_side: str = "both") -> Tuple:
+    if filter_side not in ("both", "revert"):
+        raise ValueError("filter_side must be 'both' or 'revert'")
     keys.bid_cache = {}
     keys.ask_cache = {}
     keys.mid_cache = {}
@@ -34,6 +37,7 @@ def opti_dir(asset, verbose: bool = True, shorts: bool = False, n_trials: int = 
 
     ma_candles = [i for i in keys.mid_cache if i >= keys.candles_min]
     dir_candles = [i for i in keys.mid_cache if i <= 100] or ma_candles
+    ma_methods = ordered_ma_methods()
 
     completed_scores: List[float] = []
     score_cache: Dict[tuple, tuple] = {}
@@ -45,14 +49,12 @@ def opti_dir(asset, verbose: bool = True, shorts: bool = False, n_trials: int = 
 
     def objective(trial: optuna.Trial) -> float:
         ma_method = trial.suggest_categorical(
-            "ma_method", list(keys.methods)
+            "ma_method", ma_methods
         )
         ma_candle = suggest_candle(trial, "ma_candle", ma_candles)
         ma_lookback = trial.suggest_int(
             "ma_lookback", keys.lookbacks_min, keys.lookbacks
         )
-
-        filter_side = "both" 
 
         ohlc: pd.DataFrame = keys.mid_cache[ma_candle]["close"]
         signals_prices: pd.DataFrame = main(ma_method, ohlc, ma_lookback, ma_candle, asset, shorts, daily=daily)
@@ -123,11 +125,11 @@ def opti_dir(asset, verbose: bool = True, shorts: bool = False, n_trials: int = 
         trial.set_user_attr("sqn_", initial_params[5])
         trial.set_user_attr("tr_int", intervenidos)
 
-        return -f(initial_params, filter_params)
+        return -f(initial_params, filter_params, filter_side=filter_side)
 
     study = optuna.create_study(
         direction="minimize",
-        sampler=optuna.samplers.TPESampler(),
+        sampler=optuna.samplers.TPESampler(seed=seed),
     )
 
     study.optimize(objective, n_trials=n_trials)
@@ -186,13 +188,14 @@ def opti_dir(asset, verbose: bool = True, shorts: bool = False, n_trials: int = 
 
     return best_params, best_metrics
 
-def f(initial_params: Tuple[float, ...], filter_params: Tuple[float, ...]) -> float:
+def f(initial_params: Tuple[float, ...], filter_params: Tuple[float, ...], *, filter_side="both") -> float:
     hr_0, rr_0, pr_0, tr_0, mae_0, sqn_0 = initial_params
 
     hr_f, rr_f, pr_f, tr_f, mae_f, sqn_f, intervened, f_1, f_2 = filter_params
     k = 5
     
-    comb_fitness = -1/k * np.log(np.exp(-k*f_1) + np.exp(-k*f_2))
+    # In discard mode only the retained side contributes strategy performance.
+    comb_fitness = f_1 if filter_side == "revert" else -1/k * np.log(np.exp(-k*f_1) + np.exp(-k*f_2))
     eps = 1e-6
 
     q_base = f_single(hr_0, rr_0, pr_0, int(tr_0), sqn_0, mae_0)

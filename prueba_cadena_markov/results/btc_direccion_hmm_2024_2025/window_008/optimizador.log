@@ -1,0 +1,15 @@
+Ventana 008 | Optimización 2022-02-28 a 2022-08-29 | Evaluación 2024-02-26 a 2024-03-04 (fines exclusivos)
+
+Method: OU_REVERSION | Side: Longs | Filter: revert
+Params: {'ma_method': 'TRIMA', 'ma_candle': 2, 'ma_lookback': 8, 'name': 'OU_REVERSION', 'candle': 6, 'window': 24, 'follow_tend': 0.9997547913001004}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          69.33% |          66.67%
+Risk Reward     |          0.4166 |          7.6976
+Profit Factor   |          0.9417 |         15.3952
+Trades          |             238 |     232 mod / 6
+SQN             |         -0.1901 |          1.6625
+MAE             |         1.56858 |         1.04528
+-------------------------------------------------
+

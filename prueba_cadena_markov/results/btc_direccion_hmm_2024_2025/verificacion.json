@@ -1,0 +1,17 @@
+{
+  "ventanas": 105,
+  "limites_temporales_identicos": true,
+  "semilla": 42,
+  "ensayos_por_ventana": 100,
+  "kpis_de_entrenamiento_reconciliados": true,
+  "clasificaciones_direccion_y_hmm_verificadas": true,
+  "salidas_de_las_cuatro_carteras_verificadas": true,
+  "interseccion_verificada": true,
+  "precios_de_ejecucion_sin_vela_fuente": [],
+  "minimo_efectivo": {
+    "media": -4768.0,
+    "direccion": -5411.0,
+    "hmm": -17581.0,
+    "direccion_hmm": -20540.0
+  }
+}

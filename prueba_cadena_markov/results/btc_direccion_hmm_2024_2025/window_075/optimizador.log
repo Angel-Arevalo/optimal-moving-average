@@ -1,0 +1,15 @@
+Ventana 075 | Optimización 2023-06-12 a 2023-12-11 | Evaluación 2025-06-09 a 2025-06-16 (fines exclusivos)
+
+Method: ATR_EXPANSION | Side: Longs | Filter: revert
+Params: {'ma_method': 'KAMA', 'ma_candle': 4, 'ma_lookback': 30, 'name': 'ATR_EXPANSION', 'candle': 1, 'window': 3, 'lookback_ma': 58, 'follow_tend': 1.9699419242708538}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          81.36% |          84.44%
+Risk Reward     |          0.6405 |          2.5224
+Profit Factor   |          2.7948 |         13.6931
+Trades          |              59 |     14 mod / 45
+SQN             |          1.8607 |          4.0135
+MAE             |         0.82083 |         0.46080
+-------------------------------------------------
+

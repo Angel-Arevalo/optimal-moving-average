@@ -1,0 +1,15 @@
+Ventana 056 | Optimización 2023-01-30 a 2023-07-31 | Evaluación 2025-01-27 a 2025-02-03 (fines exclusivos)
+
+Method: HURST | Side: Longs | Filter: revert
+Params: {'ma_method': 'MIDPOINT', 'ma_candle': 6, 'ma_lookback': 23, 'name': 'HURST', 'candle': 4, 'window': 80, 'follow_tend': 0.9056633267115146}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          80.00% |          80.00%
+Risk Reward     |          0.8517 |          0.8517
+Profit Factor   |          3.4070 |          3.4070
+Trades          |              40 |      0 mod / 40
+SQN             |          2.6750 |          2.6750
+MAE             |         1.52468 |         1.52468
+-------------------------------------------------
+

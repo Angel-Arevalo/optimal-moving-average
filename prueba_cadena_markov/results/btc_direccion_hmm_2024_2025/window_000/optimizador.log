@@ -1,0 +1,15 @@
+Ventana 000 | Optimización 2022-01-03 a 2022-07-04 | Evaluación 2024-01-01 a 2024-01-08 (fines exclusivos)
+
+Method: ADX | Side: Longs | Filter: revert
+Params: {'ma_method': 'TRIMA', 'ma_candle': 1, 'ma_lookback': 6, 'name': 'ADX', 'candle': 4, 'window': 2, 'follow_tend': 26.772482266625335}
+
+Métrica         | Base (Inicial)  | Filtrado       
+-------------------------------------------------
+Hit Ratio       |          73.42% |          93.33%
+Risk Reward     |          0.3801 |          0.8945
+Profit Factor   |          1.0501 |         12.5225
+Trades          |             602 |    587 mod / 15
+SQN             |          0.1425 |          4.2174
+MAE             |         1.00529 |         0.43058
+-------------------------------------------------
+

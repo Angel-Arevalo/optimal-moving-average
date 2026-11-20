@@ -56,6 +56,11 @@ def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: in
 
     return hr, rr, pr, tr, mae_val, sqn(rever_tr, trend_tr, short), tr_filtered, f_re, f_td
 
+def trend_at_entries(closed_condition: pd.Series, entry_times: pd.DatetimeIndex) -> pd.Series:
+    """Last detector close available at each entry; default to reversion before the first."""
+    return closed_condition.reindex(entry_times, method="ffill", fill_value=False)
+
+
 def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond: pd.Series, short: bool, data: pd.DataFrame, 
                               candle_ma: int, candle_dir: int, bid_df: pd.DataFrame = None, ask_df: pd.DataFrame = None, daily: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
@@ -77,13 +82,8 @@ def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond:
     if not daily and keys.temp != "d":
         entrada = entrada + pd.Timedelta(candle_ma, unit=keys.temp)
         cierres_detector = cierres_detector + pd.Timedelta(candle_dir, unit=keys.temp)
-    posiciones = cierres_detector.searchsorted(entrada, side="right") - 1
-
-    mascara_valida = posiciones >= 0
-    cond_mask_entrys = np.zeros(len(entrys), dtype=bool)
-    cond_mask_entrys[mascara_valida] = change_dir_cond.to_numpy()[posiciones[mascara_valida]]
-
-    mask_completa = np.repeat(cond_mask_entrys, 2)
+    closed_condition = change_dir_cond.set_axis(cierres_detector)
+    mask_completa = np.repeat(trend_at_entries(closed_condition, entrada).to_numpy(), 2)
 
     df_trend: pd.DataFrame = signals_and_prices[mask_completa].copy()
     df_reversion: pd.DataFrame = signals_and_prices[~mask_completa].copy()
