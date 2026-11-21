@@ -121,9 +121,13 @@ def optimizer(objective: Callable, space: list, engie: str = "gp", *, seed: int 
 
 def ordered_ma_methods() -> list:
     # A set's iteration order can vary between Python processes.
-    if isinstance(keys.methods, (set, frozenset)):
-        return sorted(keys.methods)
-    return list(keys.methods)
+    from use_tecnics import ma_methods
+    available = ma_methods(keys.has_volume)
+    # keys.methods puede restringir el conjunto (lo usa prueba_cadena_markov).
+    configured = keys.methods
+    if isinstance(configured, (set, frozenset, list, tuple)) and configured:
+        available = {m for m in available if m in set(configured)} or available
+    return sorted(available)
 
 
 def make_search_space(available=None) -> list:

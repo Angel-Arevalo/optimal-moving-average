@@ -14,13 +14,19 @@ from use_tecnics import main
 dir_methods = [
     "KEF",
     "HURST",
-#   "LO_MACKINLAY",
+   "LO_MACKINLAY",
     "ADX",
-#   "VOL_RATIO",
-#   "SHANNON",
+   "VOL_RATIO",
+   "SHANNON",
     "ATR_EXPANSION",
-#   "KELTNER_BREAKOUT",
-    "OU_REVERSION"
+   "KELTNER_BREAKOUT",
+    "OU_REVERSION",
+    "LINREG_R2",
+    "LINREG_SLOPE",
+    "HT_TRENDMODE",
+    "AROONOSC",
+    "DI_BALANCE",
+    "DRIFT_PROB",
 ]
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -38,6 +44,12 @@ def opti_dir(asset, verbose: bool = True, shorts: bool = False, n_trials: int = 
     ma_candles = [i for i in keys.mid_cache if i >= keys.candles_min]
     dir_candles = [i for i in keys.mid_cache if i <= 100] or ma_candles
     ma_methods = ordered_ma_methods()
+
+    # Los detectores de volumen sólo entran si el cache trae volumen.
+    from direction_methods import VOLUME_DIR_METHODS
+    dir_methods_eff = list(dir_methods)
+    if keys.has_volume:
+        dir_methods_eff += sorted(VOLUME_DIR_METHODS)
 
     completed_scores: List[float] = []
     score_cache: Dict[tuple, tuple] = {}
@@ -64,7 +76,7 @@ def opti_dir(asset, verbose: bool = True, shorts: bool = False, n_trials: int = 
         else:
             initial_params: tuple = backtest(signals_prices, keys.ask_cache[ma_candle]["low"], True, shorts)
 
-        dir_method = trial.suggest_categorical("name", dir_methods)
+        dir_method = trial.suggest_categorical("name", dir_methods_eff)
         dir_candle = suggest_candle(trial, "candle", dir_candles)
         dir_window = trial.suggest_int("window", 2, 100)
 
@@ -105,6 +117,40 @@ def opti_dir(asset, verbose: bool = True, shorts: bool = False, n_trials: int = 
             params["mult"] = trial.suggest_float("mult", 1.0, 4.0)
         elif dir_method == "OU_REVERSION":
             params["follow_tend"] = trial.suggest_float("follow_tend", 0.01, 1.0)
+        elif dir_method == "OBV_SLOPE":
+            params["follow_tend"] = trial.suggest_float("follow_tend", 0.0, 1.0)
+        elif dir_method == "MFI":
+            # Distancia al centro 50 (0 a 50).
+            params["follow_tend"] = trial.suggest_float("follow_tend", 0.0, 40.0)
+        elif dir_method == "ADOSC":
+            params["fastperiod"] = trial.suggest_int("fastperiod", 2, 20)
+            params["slowperiod"] = trial.suggest_int("slowperiod", 10, 60)
+            params["follow_tend"] = trial.suggest_float("follow_tend", 0.0, 1.0)
+        elif dir_method == "VWAP_DIST":
+            params["follow_tend"] = trial.suggest_float("follow_tend", 0.0, 0.1)
+        elif dir_method == "MARKETFI":
+            params["follow_tend"] = trial.suggest_float("follow_tend", 0.5, 3.0)
+        elif dir_method == "VOL_SURGE":
+            params["follow_tend"] = trial.suggest_float("follow_tend", 1.0, 4.0)
+        elif dir_method == "LINREG_R2":
+            # R² entre 0 y 1.
+            params["follow_tend"] = trial.suggest_float("follow_tend", 0.1, 0.95)
+        elif dir_method == "LINREG_SLOPE":
+            # Pendiente normalizada por precio (fracción por barra).
+            params["follow_tend"] = trial.suggest_float("follow_tend", 0.0, 0.05)
+        elif dir_method == "HT_TRENDMODE":
+            # Clasificador binario nativo: sin umbral ni ventana propios.
+            pass
+        elif dir_method == "AROONOSC":
+            # Oscilador -100 a 100; umbral sobre su magnitud.
+            params["follow_tend"] = trial.suggest_float("follow_tend", 0.0, 80.0)
+        elif dir_method == "DI_BALANCE":
+            # |+DI - -DI|, escala 0 a 100.
+            params["follow_tend"] = trial.suggest_float("follow_tend", 0.0, 50.0)
+        elif dir_method == "DRIFT_PROB":
+            # Horizonte de proyección del camino y umbral de sesgo |p-0.5| (0 a 0.5).
+            params["horizon"] = trial.suggest_int("horizon", 1, 20)
+            params["follow_tend"] = trial.suggest_float("follow_tend", 0.0, 0.45)
 
         filter_params: tuple = dir_main(signals_prices, asset, ma_candle, params, shorts, filter_side, daily=daily)
 
@@ -221,6 +267,18 @@ def f(initial_params: Tuple[float, ...], filter_params: Tuple[float, ...], *, fi
     d_hr = hr_f - hr_0
     gate_hr = 1.0 / (1.0 + np.exp(-100.0 * d_hr))
 
-    final_score = q_filtered * r_improvement * gate_hr * activity_gate * (1.0 + differentiation_reward) * comb_fitness
+    # Multiplicador de confianza (sigmoide): se fía de los KPIs solo si la
+    # estrategia final alcanza el estándar de actividad. Estándar: ~1 trade cada
+    # 2 semanas = 28/año; con 3 años de train, 28*3 = 84 operaciones es el centro.
+    # Por debajo de 84 el score se descuenta fuerte; por encima satura a ~1 sin
+    # comprimir a los candidatos con muchas operaciones (a diferencia de un tanh
+    # escalado, que achataba las diferencias por arriba).
+    # sigmoide(tr_f): 84 -> 0.50, 120 -> 0.86, 40 -> 0.10, 12 -> 0.03, 270 -> ~1.
+    confidence_center = 84.0
+    confidence_slope = 0.05
+    confidence = float(1.0 / (1.0 + np.exp(-confidence_slope * (tr_f - confidence_center))))
+
+    final_score = (q_filtered * r_improvement * gate_hr * activity_gate
+                   * (1.0 + differentiation_reward) * comb_fitness * confidence)
 
     return float(final_score)

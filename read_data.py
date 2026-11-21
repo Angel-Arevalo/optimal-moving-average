@@ -19,8 +19,20 @@ def read_asset(asset_name: str) -> pd.DataFrame:
 
 OHLC = ["open", "high", "low", "close"]
 
+# Nombre interno único para el volumen y alias de origen aceptados.
+VOLUME = "volume"
+VOLUME_ALIASES = ("volume", "vol")
+
 
 OHLC_AGG = {"open": "first", "high": "max", "low": "min", "close": "last"}
+
+# El volumen de una vela agregada es la suma del volumen de las velas fuente.
+OHLCV_AGG = {**OHLC_AGG, VOLUME: "sum"}
+
+
+def _agg_for(df: pd.DataFrame) -> dict:
+    """Reglas de agregación OHLC, con volumen sólo si la columna está presente."""
+    return OHLCV_AGG if VOLUME in df.columns else OHLC_AGG
 
 
 def ohlc_resolution(index: pd.DatetimeIndex) -> pd.Timedelta:
@@ -45,6 +57,11 @@ def prepare_asset(asset) -> pd.DataFrame:
         raise TypeError("Se requiere un DataFrame, una ruta o un DataArray de Quantiacs")
 
     df = df.rename(columns=lambda col: str(col).strip("<>").lower())
+    # Unificar los alias de volumen a un único nombre interno.
+    for alias in VOLUME_ALIASES:
+        if alias in df.columns and alias != VOLUME:
+            df = df.rename(columns={alias: VOLUME})
+            break
     for col in ["time", "date"]:
         if col in df.columns:
             df = df.set_index(col)
@@ -62,7 +79,9 @@ def prepare_asset(asset) -> pd.DataFrame:
     if not set(OHLC).issubset(df.columns):
         raise ValueError("Se requieren bid y ask, o las cuatro columnas open, high, low y close")
 
-    df = df[OHLC].dropna()
+    # Conservar el volumen como columna extra sólo cuando el origen lo trae.
+    cols = OHLC + ([VOLUME] if VOLUME in df.columns else [])
+    df = df[cols].dropna()
     if df.empty or df.index.hasnans or df.index.has_duplicates:
         raise ValueError("Se requiere una vela OHLC por timestamp de un único activo")
     return df
@@ -92,7 +111,7 @@ def prepared_ohlc(df: pd.DataFrame, time_rule: int, temporality: str):
             ask = df["ask"].groupby(groups).ohlc().iloc[:completed]
             bid.index = ask.index = closes
             return bid, ask, (bid + ask) / 2
-        bars = df.groupby(groups).agg(OHLC_AGG).iloc[:completed]
+        bars = df.groupby(groups).agg(_agg_for(df)).iloc[:completed]
         bars.index = closes
         return bars.copy(), bars.copy(), bars
 
@@ -103,7 +122,7 @@ def prepared_ohlc(df: pd.DataFrame, time_rule: int, temporality: str):
             raise ValueError("La duración solicitada debe ser múltiplo de la vela OHLC de origen")
         offset = (df.index[0] - df.index[0].normalize()) % source
         bins = df.resample(str(time_rule) + temporality, origin="start_day", offset=offset)
-        bars = bins.agg(OHLC_AGG).dropna()
+        bars = bins.agg(_agg_for(df)).dropna()
         # El último intervalo sólo puede usarse cuando termina la última vela fuente.
         bars = bars[bars.index + duration <= df.index[-1] + source]
         return bars.copy(), bars.copy(), bars

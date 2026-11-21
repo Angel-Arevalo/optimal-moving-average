@@ -3,6 +3,7 @@ import pandas as pd
 from skopt.space import Real, Integer, Categorical
 
 import numpy as np
+import talib
 import keys
 from tester_dir import hit_ratio, risk_reward, profit_factor, mae, sqn
 from find_best import f
@@ -380,3 +381,337 @@ def ou_reversion(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataF
     theta_series = pd.Series(theta_result, index=mid_close.index)
 
     return theta_series < follow_tend
+
+
+# --- Detectores de régimen basados en volumen ---------------------------------
+# Todos leen cache["volume"], que keys.fill_ohlc_dict conserva sólo cuando el
+# origen trae volumen. find_best_dir los excluye de la optimización si no lo hay
+# (ver keys.has_volume). El guard evita un KeyError si se invocan sin volumen.
+
+# Detectores de dirección que requieren volumen.
+VOLUME_DIR_METHODS = {"OBV_SLOPE", "MFI", "ADOSC", "VWAP_DIST", "MARKETFI", "VOL_SURGE"}
+
+
+def _require_volume(cache) -> pd.Series:
+    if "volume" not in cache:
+        raise ValueError("Este detector de dirección requiere volumen y el cache no lo tiene")
+    return cache["volume"]
+
+
+@_dir_methods("OBV_SLOPE")
+def obv_slope(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+    """Pendiente del OBV normalizada: volumen que respalda el movimiento = tendencia."""
+    candle = params["candle"]
+    window = params["window"]
+    follow_tend = params["follow_tend"]
+
+    cache = data if data is not None else keys.mid_cache[candle]
+    close: pd.Series = cache["close"]
+    volume = _require_volume(cache)
+
+    obv = pd.Series(talib.OBV(close.to_numpy(float), volume.to_numpy(float)), index=close.index)
+    # Cambio relativo del OBV en la ventana, escalado por el volumen medio para
+    # hacerlo comparable entre activos y tramos.
+    obv_change = obv - obv.shift(window)
+    vol_scale = volume.rolling(window=window).sum().replace(0, np.nan)
+    slope = (obv_change / vol_scale).replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    return slope.abs() > follow_tend
+
+
+@_dir_methods("MFI")
+def money_flow_index(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+    """Money Flow Index: lejos del centro (50) = presión direccional = tendencia."""
+    candle = params["candle"]
+    window = params["window"]
+    follow_tend = params["follow_tend"]
+
+    cache = data if data is not None else keys.mid_cache[candle]
+    high: pd.Series = cache["high"]
+    low: pd.Series = cache["low"]
+    close: pd.Series = cache["close"]
+    volume = _require_volume(cache)
+
+    mfi = pd.Series(
+        talib.MFI(high.to_numpy(float), low.to_numpy(float), close.to_numpy(float),
+                  volume.to_numpy(float), timeperiod=window),
+        index=close.index,
+    ).fillna(50.0)
+
+    # Distancia al centro 50 (0 a 50). follow_tend es el umbral de esa distancia.
+    return (mfi - 50.0).abs() > follow_tend
+
+
+@_dir_methods("ADOSC")
+def ad_oscillator(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+    """Oscilador de acumulación/distribución: magnitud alta = flujo con dirección."""
+    candle = params["candle"]
+    fastperiod = params["fastperiod"]
+    slowperiod = params["slowperiod"]
+    follow_tend = params["follow_tend"]
+
+    cache = data if data is not None else keys.mid_cache[candle]
+    high: pd.Series = cache["high"]
+    low: pd.Series = cache["low"]
+    close: pd.Series = cache["close"]
+    volume = _require_volume(cache)
+
+    # ADOSC sólo tiene sentido con slow > fast; forzarlo evita osciladores degenerados.
+    if slowperiod <= fastperiod:
+        slowperiod = fastperiod + 1
+
+    adosc = pd.Series(
+        talib.ADOSC(high.to_numpy(float), low.to_numpy(float), close.to_numpy(float),
+                    volume.to_numpy(float), fastperiod=fastperiod, slowperiod=slowperiod),
+        index=close.index,
+    ).fillna(0.0)
+
+    # Normalizar por el volumen medio para que follow_tend sea comparable.
+    vol_scale = volume.rolling(window=slowperiod).mean().replace(0, np.nan)
+    norm = (adosc / vol_scale).replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    return norm.abs() > follow_tend
+
+
+@_dir_methods("VWAP_DIST")
+def vwap_distance(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+    """Distancia relativa del precio al VWAP rolling: lejos del VWAP = tendencia."""
+    candle = params["candle"]
+    window = params["window"]
+    follow_tend = params["follow_tend"]
+
+    cache = data if data is not None else keys.mid_cache[candle]
+    high: pd.Series = cache["high"]
+    low: pd.Series = cache["low"]
+    close: pd.Series = cache["close"]
+    volume = _require_volume(cache)
+
+    typical = (high + low + close) / 3.0
+    pv = (typical * volume).rolling(window=window).sum()
+    vol_sum = volume.rolling(window=window).sum().replace(0, np.nan)
+    vwap = pv / vol_sum
+
+    dist = ((close - vwap).abs() / vwap).replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    return dist > follow_tend
+
+
+@_dir_methods("MARKETFI")
+def market_facilitation(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+    """Market Facilitation Index (Williams): rango por unidad de volumen.
+
+    Un MARKETFI alto respecto a su media = el movimiento avanza con poco volumen
+    relativo (eficiente) = tendencia.
+    """
+    candle = params["candle"]
+    window = params["window"]
+    follow_tend = params["follow_tend"]
+
+    cache = data if data is not None else keys.mid_cache[candle]
+    high: pd.Series = cache["high"]
+    low: pd.Series = cache["low"]
+    volume = _require_volume(cache)
+
+    mktfi = pd.Series(
+        talib.MARKETFI(high.to_numpy(float), low.to_numpy(float), volume.to_numpy(float)),
+        index=high.index,
+    ).replace([np.inf, -np.inf], np.nan)
+
+    mktfi_ma = mktfi.rolling(window=window).mean()
+    ratio = (mktfi / mktfi_ma).replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    return ratio > follow_tend
+
+
+@_dir_methods("VOL_SURGE")
+def volume_surge(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+    """Volumen actual vs. su media: expansión de volumen acompaña rupturas = tendencia."""
+    candle = params["candle"]
+    window = params["window"]
+    follow_tend = params["follow_tend"]
+
+    cache = data if data is not None else keys.mid_cache[candle]
+    volume = _require_volume(cache)
+
+    vol_ma = volume.rolling(window=window).mean().replace(0, np.nan)
+    surge = (volume / vol_ma).replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    return surge > follow_tend
+
+
+# --- Detectores de régimen por geometría, ciclo y momentum ---------------------
+# Sólo usan precio (high/low/close); no requieren volumen.
+
+@_dir_methods("LINREG_R2")
+def linreg_r2(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+    """R² de la regresión del precio contra el tiempo: recta limpia = tendencia.
+
+    R² alto (cercano a 1) = el precio sigue una línea; bajo = lateral/ruidoso.
+    Se calcula como el cuadrado de la correlación precio-tiempo en la ventana.
+    """
+    candle = params["candle"]
+    window = params["window"]
+    follow_tend = params["follow_tend"]
+
+    cache = data if data is not None else keys.mid_cache[candle]
+    close: pd.Series = cache["close"]
+
+    # Serie temporal lineal (0,1,2,...) como variable independiente.
+    t = pd.Series(np.arange(len(close), dtype=np.float64), index=close.index)
+    corr = pd.Series(
+        talib.CORREL(close.to_numpy(float), t.to_numpy(float), timeperiod=window),
+        index=close.index,
+    )
+    r2 = (corr ** 2).replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    return r2 > follow_tend
+
+
+@_dir_methods("LINREG_SLOPE")
+def linreg_slope(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+    """Pendiente de la regresión lineal, normalizada por precio: empinada = tendencia."""
+    candle = params["candle"]
+    window = params["window"]
+    follow_tend = params["follow_tend"]
+
+    cache = data if data is not None else keys.mid_cache[candle]
+    close: pd.Series = cache["close"]
+
+    slope = pd.Series(
+        talib.LINEARREG_SLOPE(close.to_numpy(float), timeperiod=window),
+        index=close.index,
+    )
+    # Normalizar por el precio hace el umbral comparable entre activos.
+    norm_slope = (slope / close).replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    return norm_slope.abs() > follow_tend
+
+
+@_dir_methods("HT_TRENDMODE")
+def ht_trendmode(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+    """Hilbert Transform Trend vs Cycle Mode: clasificador nativo de TA-Lib.
+
+    Devuelve 1 en modo tendencia, 0 en modo ciclo. No usa ventana ni umbral.
+    """
+    candle = params["candle"]
+
+    cache = data if data is not None else keys.mid_cache[candle]
+    close: pd.Series = cache["close"]
+
+    mode = pd.Series(
+        talib.HT_TRENDMODE(close.to_numpy(float)),
+        index=close.index,
+    ).fillna(0)
+
+    return mode > 0
+
+
+@_dir_methods("AROONOSC")
+def aroon_oscillator(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+    """Aroon Oscillator (-100 a 100): magnitud alta = tendencia establecida."""
+    candle = params["candle"]
+    window = params["window"]
+    follow_tend = params["follow_tend"]
+
+    cache = data if data is not None else keys.mid_cache[candle]
+    high: pd.Series = cache["high"]
+    low: pd.Series = cache["low"]
+
+    osc = pd.Series(
+        talib.AROONOSC(high.to_numpy(float), low.to_numpy(float), timeperiod=window),
+        index=high.index,
+    ).fillna(0)
+
+    return osc.abs() > follow_tend
+
+
+@_dir_methods("DI_BALANCE")
+def di_balance(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+    """Diferencia |+DI - -DI|: sesgo direccional neto (no sólo la fuerza como ADX)."""
+    candle = params["candle"]
+    window = params["window"]
+    follow_tend = params["follow_tend"]
+
+    cache = data if data is not None else keys.mid_cache[candle]
+    high: pd.Series = cache["high"]
+    low: pd.Series = cache["low"]
+    close: pd.Series = cache["close"]
+
+    plus_di = pd.Series(
+        talib.PLUS_DI(high.to_numpy(float), low.to_numpy(float), close.to_numpy(float), timeperiod=window),
+        index=close.index,
+    ).fillna(0)
+    minus_di = pd.Series(
+        talib.MINUS_DI(high.to_numpy(float), low.to_numpy(float), close.to_numpy(float), timeperiod=window),
+        index=close.index,
+    ).fillna(0)
+
+    return (plus_di - minus_di).abs() > follow_tend
+
+
+# --- Detector probabilístico de deriva (camino más probable) -------------------
+
+@_dir_methods("DRIFT_PROB")
+def drift_prob(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
+    """Camino más probable bajo un random walk con deriva (Monte Carlo analítico).
+
+    Se estiman deriva (mu) y volatilidad (sigma) de los log-retornos en la ventana.
+    Bajo un paseo aleatorio con deriva, la probabilidad de que el precio termine
+    por encima del actual tras `horizon` pasos es Phi(mu*sqrt(h)/sigma). Esto es el
+    límite exacto al que converge un Monte Carlo de muchos caminos, sin ruido ni
+    coste de simular.
+
+    Se mide el SESGO del camino: |p - 0.5|. Un sesgo alto (los caminos se van
+    mayoritariamente hacia un lado) indica deriva dominante = régimen tendencial;
+    un sesgo cercano a 0 (caminos repartidos) = sin dirección probable = reversión.
+    Igual que los demás detectores, devuelve True en tendencia; el motor decide a
+    favor o en contra al invertir la señal de la media base.
+    """
+    candle = params["candle"]
+    window = params["window"]
+    horizon = params.get("horizon", 1)
+    follow_tend = params["follow_tend"]
+
+    cache = data if data is not None else keys.mid_cache[candle]
+    close: pd.Series = cache["close"]
+    values = close.to_numpy(dtype=np.float64)
+    n_obs = values.shape[0]
+
+    prob_bias = np.zeros(n_obs, dtype=np.float64)
+
+    # Log-retornos; se necesita una ventana de retornos para mu y sigma.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        log_ret = np.diff(np.log(np.where(values > 0, values, np.nan)))
+
+    if log_ret.shape[0] >= window:
+        ret_windows = np.lib.stride_tricks.sliding_window_view(log_ret, window)
+        mu = np.nanmean(ret_windows, axis=1)
+        sigma = np.nanstd(ret_windows, axis=1, ddof=1)
+
+        # z = mu*sqrt(h)/sigma  ->  p_up = Phi(z);  sesgo = |p_up - 0.5|
+        with np.errstate(divide="ignore", invalid="ignore"):
+            z = np.where(sigma > 0, mu * np.sqrt(horizon) / sigma, 0.0)
+        # Phi(z) con la relación Phi(z) = 0.5*(1 + erf(z/sqrt(2))).
+        p_up = 0.5 * (1.0 + _erf(z / np.sqrt(2.0)))
+        bias = np.abs(p_up - 0.5)
+        bias = np.where(np.isfinite(bias), bias, 0.0)
+
+        start = window  # primer índice de close con ventana completa de retornos
+        prob_bias[start:start + bias.shape[0]] = bias
+
+    bias_series = pd.Series(prob_bias, index=close.index)
+    return bias_series > follow_tend
+
+
+def _erf(x: np.ndarray) -> np.ndarray:
+    try:
+        from scipy.special import erf as _scipy_erf
+        return _scipy_erf(x)
+    except Exception:
+
+        sign = np.sign(x)
+        x = np.abs(x)
+        t = 1.0 / (1.0 + 0.3275911 * x)
+        y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t
+                    - 0.284496736) * t + 0.254829592) * t * np.exp(-x * x)
+        return sign * y
