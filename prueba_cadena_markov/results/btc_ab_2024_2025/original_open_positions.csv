@@ -1,2 +1,0 @@
-entry_time,entry_price,window,parameters,history_start,accepted,current_regime,p_0,p_1,p_2,marked_at,mark_price,unrealized_pnl_after_entry_fee
-2025-12-31 18:00:00,87567.0,104,"('KAMA', 3, 35)",2024-01-01,False,0,0.9999084281870072,1.9737456726776375e-05,7.183435626614522e-05,2026-01-01,87758.0,191.0

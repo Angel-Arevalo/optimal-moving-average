@@ -1,2 +1,0 @@
-entry_time,entry_price,exit_time,exit_price,pnl,net_return,holding_hours,window,exit_window,exit_reason,parameters,history_start,accepted,current_regime,p_0,p_1,p_2
-2025-07-08 04:00:00,107930.0,2025-07-08 08:00:00,108410.0,480.0,0.004447326971185027,4.0,79,79,ma_cross,"('KAMA', 4, 31)",2023-07-10,False,2.0,5.1237533360334886e-05,4.1868932750865945e-05,0.9999068935338887

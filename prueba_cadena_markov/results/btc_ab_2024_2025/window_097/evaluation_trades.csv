@@ -1,3 +1,0 @@
-entry_time,entry_price,exit_time,exit_price,pnl,net_return,holding_hours,window,exit_window,exit_reason,parameters,history_start,accepted,current_regime,p_0,p_1,p_2
-2025-11-11 19:00:00,103280.0,2025-11-12 10:00:00,104930.0,1650.0,0.015975987606506585,15.0,97,97,ma_cross,"('KAMA', 5, 40)",2023-11-13,False,2.0,3.530276468176364e-71,1.9818454743439702e-73,1.0
-2025-11-12 20:00:00,101310.0,2025-11-24 22:00:00,89175.0,-12135.0,-0.11978087059520284,290.0,97,99,ma_cross,"('KAMA', 5, 40)",2023-11-13,False,2.0,0.0,0.0,1.0

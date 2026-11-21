@@ -1,4 +1,0 @@
-regime,number_of_trades,win_rate,average_net_return,median_net_return,profit_factor,average_holding_time,lower_mean_bound,favorable,selection_reason
-0,0,,,,,,,False,not_converged
-1,0,,,,,,,False,not_converged
-2,0,,,,,,,False,not_converged

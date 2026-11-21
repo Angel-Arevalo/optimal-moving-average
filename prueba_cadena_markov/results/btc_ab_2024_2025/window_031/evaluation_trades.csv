@@ -1,2 +1,0 @@
-entry_time,entry_price,exit_time,exit_price,pnl,net_return,holding_hours,window,exit_window,exit_reason,parameters,history_start,accepted,current_regime,p_0,p_1,p_2
-2024-08-11 14:00:00,60293.0,2024-08-13 18:00:00,61402.0,1109.0,0.018393511684606838,52.0,31,32,ma_cross,"('T3', 2, 29)",2022-08-08,True,2.0,2.959423688099194e-06,0.04986479852390904,0.9501322420524025

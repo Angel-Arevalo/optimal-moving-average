@@ -1,2 +1,0 @@
-entry_time,entry_price,exit_time,exit_price,pnl,net_return,holding_hours,window,exit_window,exit_reason,parameters,history_start,accepted,current_regime,p_0,p_1,p_2
-2025-10-09 06:00:00,122190.0,2025-10-20 07:00:00,111360.0,-10830.0,-0.08863245764792536,265.0,92,94,ma_cross,"('TRIMA', 5, 32)",2023-10-09,True,1,8.210577842129633e-05,0.9995001484419188,0.00041774577965978787

@@ -1,2 +1,0 @@
-entry_time,entry_price,exit_time,exit_price,pnl,net_return,holding_hours,window,exit_window,exit_reason,parameters,history_start,accepted,current_regime,p_0,p_1,p_2
-2025-12-05 18:00:00,88710.0,2025-12-08 06:00:00,91130.0,2420.0,0.027279900800360725,60.0,100,101,ma_cross,"('EMA', 6, 25)",2023-12-04,False,1.0,0.0031073381436998023,0.9968887192247722,3.942631528217595e-06

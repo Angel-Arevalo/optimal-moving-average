@@ -1,4 +1,0 @@
-regime,number_of_trades,win_rate,average_net_return,median_net_return,profit_factor,average_holding_time,lower_mean_bound,favorable,selection_reason
-0,12,0.75,0.005477998806080567,0.01397034000092543,1.8221128149615857,47.5,,False,insufficient_trades
-1,82,0.8292682926829268,0.004361223939781921,0.006230536073178458,2.3237094800479623,40.31707317073171,0.00020127061382693915,True,positive_lower_bound
-2,1,1.0,0.006045949214026602,0.006045949214026602,inf,6.0,,False,insufficient_trades

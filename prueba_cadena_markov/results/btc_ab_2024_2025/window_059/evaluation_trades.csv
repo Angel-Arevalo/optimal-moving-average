@@ -1,2 +1,0 @@
-entry_time,entry_price,exit_time,exit_price,pnl,net_return,holding_hours,window,exit_window,exit_reason,parameters,history_start,accepted,current_regime,p_0,p_1,p_2
-2025-02-21 21:00:00,95470.0,2025-02-28 21:00:00,84932.0,-10538.0,-0.11038022415418457,168.0,59,60,ma_cross,"('WMA', 3, 33)",2023-02-20,False,1.0,8.502640024561953e-07,0.999999113732816,3.600318112361831e-08
