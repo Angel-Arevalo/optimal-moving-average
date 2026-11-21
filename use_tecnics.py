@@ -10,13 +10,13 @@ avalible_methods: set = {"SMA", "EMA", "WMA", "DEMA", "TEMA", "TRIMA", "KAMA", "
 # actualmente este método va a retornar el vector de compras y ventas
 # De ahora en adelanta se asume que data ya es el vector de información
 # final
-def main(method: str, data: pd.Series, lookback: int, candle: int, nooh_data: pd.DataFrame, shorts: bool = False, bid_df: pd.DataFrame = None, ask_df: pd.DataFrame = None, daily: bool = False) -> pd.DataFrame:
+def main(method: str, data: pd.Series, lookback: int, candle: int, nooh_data: pd.DataFrame, shorts: bool = False, bid_df: pd.DataFrame = None, ask_df: pd.DataFrame = None, daily: bool = False, *, weekly_closes: bool = True) -> pd.DataFrame:
 
     if method not in avalible_methods:
         raise ValueError("Not avalible method")
 
     ma: pd.Series = SIMPLE_METHODS[method](data, lookback)
-    ma = get_vector_buys(ma, data, nooh_data, shorts, daily)
+    ma = get_vector_buys(ma, data, nooh_data, shorts, daily, weekly_closes=weekly_closes)
 
     if bid_df is not None and ask_df is not None:
         ask_close = ask_df["close"]

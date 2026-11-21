@@ -26,9 +26,9 @@ dir_methods = [
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 def opti_dir(asset, verbose: bool = True, shorts: bool = False, n_trials: int = 100,
-             *, seed: int = DEFAULT_SEED, filter_side: str = "both") -> Tuple:
-    if filter_side not in ("both", "revert"):
-        raise ValueError("filter_side must be 'both' or 'revert'")
+             *, seed: int = DEFAULT_SEED, filter_side: str = "both", weekly_closes: bool = True) -> Tuple:
+    if filter_side not in ("both", "revert", "tend"):
+        raise ValueError("filter_side must be 'both', 'revert' or 'tend'")
     keys.bid_cache = {}
     keys.ask_cache = {}
     keys.mid_cache = {}
@@ -57,7 +57,7 @@ def opti_dir(asset, verbose: bool = True, shorts: bool = False, n_trials: int = 
         )
 
         ohlc: pd.DataFrame = keys.mid_cache[ma_candle]["close"]
-        signals_prices: pd.DataFrame = main(ma_method, ohlc, ma_lookback, ma_candle, asset, shorts, daily=daily)
+        signals_prices: pd.DataFrame = main(ma_method, ohlc, ma_lookback, ma_candle, asset, shorts, daily=daily, weekly_closes=weekly_closes)
 
         if shorts:
             initial_params: tuple = backtest(signals_prices, keys.bid_cache[ma_candle]["high"], True, shorts)
@@ -193,9 +193,12 @@ def f(initial_params: Tuple[float, ...], filter_params: Tuple[float, ...], *, fi
 
     hr_f, rr_f, pr_f, tr_f, mae_f, sqn_f, intervened, f_1, f_2 = filter_params
     k = 5
-    
-    # In discard mode only the retained side contributes strategy performance.
-    comb_fitness = f_1 if filter_side == "revert" else -1/k * np.log(np.exp(-k*f_1) + np.exp(-k*f_2))
+
+    # El detector debe separar bien AMBOS lados (reversión f_1 y tendencia f_2),
+    # sin importar cuál se descarte luego: un modelo sin sesgo es bueno en los dos.
+    # El soft-min premia que el peor de los dos también sea alto; si el lado que
+    # se descartaría era malo, el score baja igual que si fallara el que se conserva.
+    comb_fitness = -1 / k * np.log(np.exp(-k * f_1) + np.exp(-k * f_2))
     eps = 1e-6
 
     q_base = f_single(hr_0, rr_0, pr_0, int(tr_0), sqn_0, mae_0)

@@ -18,7 +18,7 @@ DEFAULT_SEED = 42
 
 
 def opti_main(data, verbose: bool = True, engie: str = "gp", shorts: bool = False,
-              *, seed: int = DEFAULT_SEED) -> list:
+              *, seed: int = DEFAULT_SEED, weekly_closes: bool = True) -> list:
 
     daily = keys.fill_ohlc_dict(data)
 
@@ -29,7 +29,7 @@ def opti_main(data, verbose: bool = True, engie: str = "gp", shorts: bool = Fals
 
         ohlc: pd.DataFrame = keys.mid_cache[param[1]]["close"]
 
-        signals_prices: pd.DataFrame = main(method, ohlc, param[2], param[1], data, shorts, daily=daily)
+        signals_prices: pd.DataFrame = main(method, ohlc, param[2], param[1], data, shorts, daily=daily, weekly_closes=weekly_closes)
 
         if shorts:
             hr, rr, pr, tr, mae, sqn = backtest(signals_prices, keys.bid_cache[param[1]]["high"], True, shorts)

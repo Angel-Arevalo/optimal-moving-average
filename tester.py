@@ -31,7 +31,7 @@ def backtest(signals_and_prices: pd.DataFrame, ohlc_data: pd.DataFrame, calq_sqn
     return hr, rr, pr, tr, mae_val
 
 
-def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.DataFrame, shorts: bool = False, daily: bool = False) -> pd.Series:
+def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.DataFrame, shorts: bool = False, daily: bool = False, *, weekly_closes: bool = True) -> pd.Series:
 
     pre_man: pd.Series = man_back.shift(1)
     pre_data: pd.Series = real_data.shift(1)
@@ -48,6 +48,15 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.Dat
 
     if nooh_data is None:
         raise ValueError("No se puede hacer sin la data original")
+
+    if not weekly_closes:
+        # Para el fitness sólo cuentan operaciones completas. No inventar una
+        # salida al terminar la muestra ni al cambiar de semana.
+        if not vector_buy.empty and vector_buy.iloc[0] != entry_sig:
+            vector_buy = vector_buy.iloc[1:]
+        if not vector_buy.empty and vector_buy.iloc[-1] == entry_sig:
+            vector_buy = vector_buy.iloc[:-1]
+        return vector_buy
 
     for fecha_domingo, señales_semana in vector_buy.groupby(pd.Grouper(freq='W')):
 
@@ -130,5 +139,4 @@ def mae(signals_and_prices: pd.DataFrame, ohlc_data: pd.DataFrame, short: bool):
         mae_val += trade_mae
 
     return mae_val/(len(signals_and_prices)//2)
-
 
