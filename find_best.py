@@ -53,7 +53,7 @@ def opti_main(data, verbose: bool = True, engie: str = "gp", shorts: bool = Fals
         print(f"\nhit ratio: {b_ht}\nrisk reward: {b_rr}\nprofit factor: {b_pr}\ntrades: {b_trades}")
         print(f"Resultado de estabilidad {b_score}")
         print(f"Mae {b_mae}")
-        print(f"Operando {'cortos' if shorts else 'largos'}" )
+        print(f"Operando {'cortos' if shorts else 'largos'} en {keys.side}" )
 
     return best_result
 

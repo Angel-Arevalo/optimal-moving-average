@@ -22,7 +22,7 @@ def ma_methods(has_volume: bool = True) -> set:
 # actualmente este método va a retornar el vector de compras y ventas
 # De ahora en adelanta se asume que data ya es el vector de información
 # final
-def main(method: str, data: pd.Series, lookback: int, candle: int, nooh_data: pd.DataFrame, shorts: bool = False, bid_df: pd.DataFrame = None, ask_df: pd.DataFrame = None, daily: bool = False, *, weekly_closes: bool = True) -> pd.DataFrame:
+def main(method: str, data: pd.Series, lookback: int, candle: int, nooh_data: pd.DataFrame, shorts: bool = False, bid_df: pd.DataFrame = None, ask_df: pd.DataFrame = None, daily: bool = False, *, weekly_closes: bool = True, side: str = None) -> pd.DataFrame:
 
     if method in volume_methods:
         volume = _volume_for(candle, data.index, bid_df, ask_df)
@@ -32,7 +32,7 @@ def main(method: str, data: pd.Series, lookback: int, candle: int, nooh_data: pd
     else:
         raise ValueError("Not avalible method")
 
-    ma = get_vector_buys(ma, data, nooh_data, shorts, daily, weekly_closes=weekly_closes)
+    ma = get_vector_buys(ma, data, nooh_data, shorts, daily, weekly_closes=weekly_closes, side=side)
 
     if bid_df is not None and ask_df is not None:
         ask_close = ask_df["close"]

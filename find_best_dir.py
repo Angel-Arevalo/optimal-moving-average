@@ -35,6 +35,9 @@ def opti_dir(asset, verbose: bool = True, shorts: bool = False, n_trials: int = 
              *, seed: int = DEFAULT_SEED, filter_side: str = "both", weekly_closes: bool = True) -> Tuple:
     if filter_side not in ("both", "revert", "tend"):
         raise ValueError("filter_side must be 'both', 'revert' or 'tend'")
+
+    base_side = "tend" if filter_side == "tend" else "revert"
+
     keys.bid_cache = {}
     keys.ask_cache = {}
     keys.mid_cache = {}
@@ -45,7 +48,6 @@ def opti_dir(asset, verbose: bool = True, shorts: bool = False, n_trials: int = 
     dir_candles = [i for i in keys.mid_cache if i <= 100] or ma_candles
     ma_methods = ordered_ma_methods()
 
-    # Los detectores de volumen sólo entran si el cache trae volumen.
     from direction_methods import VOLUME_DIR_METHODS
     dir_methods_eff = list(dir_methods)
     if keys.has_volume:
@@ -69,7 +71,7 @@ def opti_dir(asset, verbose: bool = True, shorts: bool = False, n_trials: int = 
         )
 
         ohlc: pd.DataFrame = keys.mid_cache[ma_candle]["close"]
-        signals_prices: pd.DataFrame = main(ma_method, ohlc, ma_lookback, ma_candle, asset, shorts, daily=daily, weekly_closes=weekly_closes)
+        signals_prices: pd.DataFrame = main(ma_method, ohlc, ma_lookback, ma_candle, asset, shorts, daily=daily, weekly_closes=weekly_closes, side=base_side)
 
         if shorts:
             initial_params: tuple = backtest(signals_prices, keys.bid_cache[ma_candle]["high"], True, shorts)

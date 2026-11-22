@@ -9,19 +9,25 @@ from tester_dir import hit_ratio, risk_reward, profit_factor, mae, sqn
 from find_best import f
 
 def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: int, params_method: dict, short: bool, filter: str, daily: bool = False) -> Tuple[float, ...]:
+    if filter not in ("both", "revert", "tend"):
+        raise ValueError("filter must be 'both', 'revert' or 'tend'")
+    base_side = "tend" if filter == "tend" else "revert"
     cond_vector: pd.Series = DIR_METHODS[params_method["name"]](signals_and_prices, params_method)
 
-    rever_tr, trend_tr = _split_signals_and_change(signals_and_prices, cond_vector, short, data, candle_ma, params_method["candle"], daily=daily)
+    rever_tr, trend_tr = _split_signals_and_change(signals_and_prices, cond_vector, short, data, candle_ma, params_method["candle"], daily=daily, base_side=base_side)
 
-    tr_filtered = len(trend_tr)//2
+    base_tend = base_side == "tend"
+    s = (not short) if base_tend else short
+
+    tr_filtered = len(rever_tr)//2 if base_tend else len(trend_tr)//2
     empty_df = pd.DataFrame({"Signals": [], "Prices": []})
 
-    hr_re, hr_td = hit_ratio(rever_tr, empty_df, short), hit_ratio(empty_df, trend_tr, not short)
-    rr_re, rr_td = risk_reward(rever_tr, empty_df, short), risk_reward(empty_df, trend_tr, not short)
-    pr_re, pr_td = profit_factor(rever_tr, empty_df, short), profit_factor(empty_df, trend_tr, not short)
-    tr_re, tr_td = len(rever_tr)//2, tr_filtered
-    sq_re, sq_td = sqn(rever_tr, empty_df, short), sqn(empty_df, trend_tr, not short)
-    ma_re, ma_td = mae(rever_tr, empty_df, short, candle_ma), mae(empty_df, trend_tr, not short, candle_ma)
+    hr_re, hr_td = hit_ratio(rever_tr, empty_df, s), hit_ratio(empty_df, trend_tr, s)
+    rr_re, rr_td = risk_reward(rever_tr, empty_df, s), risk_reward(empty_df, trend_tr, s)
+    pr_re, pr_td = profit_factor(rever_tr, empty_df, s), profit_factor(empty_df, trend_tr, s)
+    tr_re, tr_td = len(rever_tr)//2, len(trend_tr)//2
+    sq_re, sq_td = sqn(rever_tr, empty_df, s), sqn(empty_df, trend_tr, s)
+    ma_re, ma_td = mae(rever_tr, empty_df, s, candle_ma), mae(empty_df, trend_tr, s, candle_ma)
 
     f_re = f(hr_re,
              rr_re,
@@ -49,21 +55,25 @@ def dir_main(signals_and_prices: pd.DataFrame, data: pd.DataFrame, candle_ma: in
     else:
         raise ValueError("No definido")
 
-    hr = hit_ratio(rever_tr, trend_tr, short)
-    rr = risk_reward(rever_tr, trend_tr, short)
-    pr = profit_factor(rever_tr, trend_tr, short)
+    hr = hit_ratio(rever_tr, trend_tr, s)
+    rr = risk_reward(rever_tr, trend_tr, s)
+    pr = profit_factor(rever_tr, trend_tr, s)
     tr = len(rever_tr)//2 + len(trend_tr)//2
-    mae_val = mae(rever_tr, trend_tr, short, candle_ma)
+    mae_val = mae(rever_tr, trend_tr, s, candle_ma)
 
-    return hr, rr, pr, tr, mae_val, sqn(rever_tr, trend_tr, short), tr_filtered, f_re, f_td
+    return hr, rr, pr, tr, mae_val, sqn(rever_tr, trend_tr, s), tr_filtered, f_re, f_td
 
 def trend_at_entries(closed_condition: pd.Series, entry_times: pd.DatetimeIndex) -> pd.Series:
-    """Last detector close available at each entry; default to reversion before the first."""
     return closed_condition.reindex(entry_times, method="ffill", fill_value=False)
 
 
 def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond: pd.Series, short: bool, data: pd.DataFrame, 
-                              candle_ma: int, candle_dir: int, bid_df: pd.DataFrame = None, ask_df: pd.DataFrame = None, daily: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
+                              candle_ma: int, candle_dir: int, bid_df: pd.DataFrame = None, ask_df: pd.DataFrame = None, daily: bool = False, *, base_side: str = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+
+    if base_side is None:
+        base_side = keys.side
+    if base_side not in ("tend", "revert"):
+        raise ValueError("base_side must be 'tend' or 'revert'")
 
     entry_sig: int = -1 if short else 1
 
@@ -77,7 +87,6 @@ def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond:
 
     entrys = signals_and_prices[signals_and_prices["Signals"] == entry_sig]
 
-    # En diario los dos índices identifican la sesión ya cerrada.
     entrada = entrys.index
     cierres_detector = change_dir_cond.index
     if not daily and keys.temp != "d":
@@ -86,19 +95,26 @@ def _split_signals_and_change(signals_and_prices: pd.DataFrame, change_dir_cond:
     closed_condition = change_dir_cond.set_axis(cierres_detector)
     mask_completa = np.repeat(trend_at_entries(closed_condition, entrada).to_numpy(), 2)
 
-    df_trend: pd.DataFrame = signals_and_prices[mask_completa].copy()
-    df_reversion: pd.DataFrame = signals_and_prices[~mask_completa].copy()
+    # Se invierte la operación cuando el régimen no coincide con la base:
+    # base revert -> se invierte en tendencia; base tend -> se invierte fuera de ella.
+    base_tend = base_side == "tend"
+    flip_mask = ~mask_completa if base_tend else mask_completa
 
-    if not df_trend.empty:
-        df_trend["Signals"] = -df_trend["Signals"]
+    df_flip: pd.DataFrame = signals_and_prices[flip_mask].copy()
+    df_keep: pd.DataFrame = signals_and_prices[~flip_mask].copy()
 
-        df_trend["Prices"] = np.where(
-            df_trend["Signals"] == 1, 
-            ask_close.loc[df_trend.index], 
-            bid_close.loc[df_trend.index]
+    if not df_flip.empty:
+        df_flip["Signals"] = -df_flip["Signals"]
+
+        df_flip["Prices"] = np.where(
+            df_flip["Signals"] == 1,
+            ask_close.loc[df_flip.index],
+            bid_close.loc[df_flip.index]
         )
 
-    return df_reversion, df_trend
+    if base_tend:
+        return df_flip, df_keep
+    return df_keep, df_flip
 
 DIR_METHODS: Dict[str, Callable[[dict], pd.Series]] = {}
 def _dir_methods(name: str) -> Callable[[Callable[[dict], pd.Series]], Callable[[dict], pd.Series]]:
@@ -649,24 +665,8 @@ def di_balance(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFra
     return (plus_di - minus_di).abs() > follow_tend
 
 
-# --- Detector probabilístico de deriva (camino más probable) -------------------
-
 @_dir_methods("DRIFT_PROB")
 def drift_prob(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFrame] = None) -> pd.Series:
-    """Camino más probable bajo un random walk con deriva (Monte Carlo analítico).
-
-    Se estiman deriva (mu) y volatilidad (sigma) de los log-retornos en la ventana.
-    Bajo un paseo aleatorio con deriva, la probabilidad de que el precio termine
-    por encima del actual tras `horizon` pasos es Phi(mu*sqrt(h)/sigma). Esto es el
-    límite exacto al que converge un Monte Carlo de muchos caminos, sin ruido ni
-    coste de simular.
-
-    Se mide el SESGO del camino: |p - 0.5|. Un sesgo alto (los caminos se van
-    mayoritariamente hacia un lado) indica deriva dominante = régimen tendencial;
-    un sesgo cercano a 0 (caminos repartidos) = sin dirección probable = reversión.
-    Igual que los demás detectores, devuelve True en tendencia; el motor decide a
-    favor o en contra al invertir la señal de la media base.
-    """
     candle = params["candle"]
     window = params["window"]
     horizon = params.get("horizon", 1)
@@ -679,7 +679,6 @@ def drift_prob(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFra
 
     prob_bias = np.zeros(n_obs, dtype=np.float64)
 
-    # Log-retornos; se necesita una ventana de retornos para mu y sigma.
     with np.errstate(divide="ignore", invalid="ignore"):
         log_ret = np.diff(np.log(np.where(values > 0, values, np.nan)))
 
@@ -688,15 +687,14 @@ def drift_prob(df_signals: pd.DataFrame, params: dict, data: Optional[pd.DataFra
         mu = np.nanmean(ret_windows, axis=1)
         sigma = np.nanstd(ret_windows, axis=1, ddof=1)
 
-        # z = mu*sqrt(h)/sigma  ->  p_up = Phi(z);  sesgo = |p_up - 0.5|
         with np.errstate(divide="ignore", invalid="ignore"):
             z = np.where(sigma > 0, mu * np.sqrt(horizon) / sigma, 0.0)
-        # Phi(z) con la relación Phi(z) = 0.5*(1 + erf(z/sqrt(2))).
+
         p_up = 0.5 * (1.0 + _erf(z / np.sqrt(2.0)))
         bias = np.abs(p_up - 0.5)
         bias = np.where(np.isfinite(bias), bias, 0.0)
 
-        start = window  # primer índice de close con ventana completa de retornos
+        start = window
         prob_bias[start:start + bias.shape[0]] = bias
 
     bias_series = pd.Series(prob_bias, index=close.index)

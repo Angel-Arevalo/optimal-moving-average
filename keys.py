@@ -3,7 +3,7 @@ import read_data
 import pandas as pd
 #Temporalidad de particionado
 temp: str = "min"
-
+side: str = "revert"
 # llaves para las llamadas del optimizador
 calls: int = 60
 initial_points: int = 20

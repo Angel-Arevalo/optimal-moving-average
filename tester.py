@@ -31,7 +31,12 @@ def backtest(signals_and_prices: pd.DataFrame, ohlc_data: pd.DataFrame, calq_sqn
     return hr, rr, pr, tr, mae_val
 
 
-def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.DataFrame, shorts: bool = False, daily: bool = False, *, weekly_closes: bool = True) -> pd.Series:
+def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.DataFrame, shorts: bool = False, daily: bool = False, *, weekly_closes: bool = True, side: str = None) -> pd.Series:
+
+    if side is None:
+        from keys import side
+    if side not in ("tend", "revert"):
+        raise ValueError("side must be 'tend' or 'revert'")
 
     pre_man: pd.Series = man_back.shift(1)
     pre_data: pd.Series = real_data.shift(1)
@@ -42,6 +47,9 @@ def get_vector_buys(man_back: pd.Series, real_data: pd.Series, nooh_data: pd.Dat
     vector_buy: pd.Series = (signal_buy - signal_sell).fillna(0)#.shift(1).dropna()
 
     vector_buy = vector_buy[(vector_buy != 0)]
+
+    if side == "tend":
+        vector_buy = -vector_buy
 
     entry_sig = -1 if shorts else 1
     definitive_vector: list[pd.Series] = []
